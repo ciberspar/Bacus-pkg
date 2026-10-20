@@ -1,9 +1,9 @@
 #!/bin/sh
 # ======================================================
-#  Módulo Fetch Universal - chiquiOS & Linux 🐢🐧📱
+#  Módulo Fetch Universal - bacus-pkg 🐢🐧📱
 # ======================================================
 
-# Definición de colores ANSI
+# Colores ANSI
 VERDE='\033[1;32m'
 AZUL='\033[1;34m'
 CYAN='\033[1;36m'
@@ -15,7 +15,7 @@ RESET='\033[0m'
 # --- DETECCIÓN DE DISTRO / OS ---
 if command -v pkg >/dev/null 2>&1; then
     DISTRO="ios"
-    NOM_DISTRO="iOS (a-shell / chiquiOS)"
+    NOM_DISTRO="chiquiOS / iOS"
 elif [ -f /etc/os-release ]; then
     . /etc/os-release
     DISTRO=$ID
@@ -25,12 +25,10 @@ else
     NOM_DISTRO="$(uname -s) Generic"
 fi
 
-USUARIO=$(whoami 2>/dev/null || echo "gero")
+USUARIO=$(whoami 2>/dev/null || echo "user")
 SHELL_ACTUAL=$(basename "$SHELL" 2>/dev/null || echo "sh")
 ARQ=$(uname -m)
-RUTA_ACTUAL=$(pwd)
 
-# --- IMPRESIÓN SEGÚN SISTEMA ---
 echo ""
 case "$DISTRO" in
     ios)
