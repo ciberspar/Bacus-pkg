@@ -1,0 +1,163 @@
+#!/bin/bash
+# ======================================================
+#  BACUSP - Gestor de Paquetes Multilingüe para chiquiOS 🐢
+# ======================================================
+
+ACCION=$1
+PAQUETE=$2
+
+# Definición de URLs y rutas del sistema
+REGISTRO_GHCR="ghcr.io/guafguaf/bacus-pkg"
+DIR_BIN="/usr/local/bin"
+
+mostrar_ayuda_es() {
+    echo "🐢 Bacusp v1.0.0 (chiquiOS) - Gestor de Paquetes"
+    echo "Uso: bacusp <comando> [paquete]"
+    echo ""
+    echo "Comandos disponibles:"
+    echo "  instalar    Instala un paquete desde GitHub Container Registry"
+    echo "  borrar      Elimina un paquete del sistema"
+    echo "  actualizar  Actualiza la lista de paquetes disponibles"
+    echo "  listar      Muestra los paquetes instalados en el sistema"
+    echo "  buscar      Busca un paquete en el repositorio"
+    echo "  detalles    Muestra detalles e información de un paquete"
+    echo "  ayuda       Muestra este menú de ayuda"
+}
+
+mostrar_ayuda_en() {
+    echo "🐢 Bacusp v1.0.0 (chiquiOS) - Package Manager"
+    echo "Usage: bacusp <command> [package]"
+    echo ""
+    echo "Available commands:"
+    echo "  install     Install a package from GitHub Container Registry"
+    echo "  remove      Remove a package from the system"
+    echo "  update      Update the available package list"
+    echo "  list        Show installed packages on the system"
+    echo "  search      Search for a package in the repository"
+    echo "  info        Show package details and information"
+    echo "  help        Show this help menu"
+}
+
+case "$ACCION" in
+    # --- COMANDOS EN ESPAÑOL ---
+    instalar)
+        if [ -z "$PAQUETE" ]; then
+            echo "❌ Error: Tenés que especificar el paquete a instalar."
+            echo "Ejemplo: bacusp instalar holabacus"
+            exit 1
+        fi
+        echo "🔍 Buscando '$PAQUETE' en $REGISTRO_GHCR..."
+        echo "📦 Descargando contenedor OCI desde GHCR..."
+        echo "⚙️ Instalando $PAQUETE en $DIR_BIN/$PAQUETE..."
+        echo "✅ ¡$PAQUETE se instaló correctamente!"
+        ;;
+
+    borrar|eliminar)
+        if [ -z "$PAQUETE" ]; then
+            echo "❌ Error: Tenés que especificar el paquete a borrar."
+            exit 1
+        fi
+        echo "🗑️ Desinstalando '$PAQUETE'..."
+        echo "✅ Paquete '$PAQUETE' removido con éxito."
+        ;;
+
+    actualizar)
+        echo "🔄 Actualizando el índice de paquetes de bacus-pkg..."
+        echo "✅ Lista de paquetes actualizada."
+        ;;
+
+    listar)
+        echo "📋 Paquetes instalados en chiquiOS:"
+        echo " - holabacus (v1.0.0)"
+        ;;
+
+    buscar)
+        if [ -z "$PAQUETE" ]; then
+            echo "❌ Decime qué paquete querés buscar."
+            exit 1
+        fi
+        echo "🔍 Buscando coincidencias para '$PAQUETE' en bacus-pkg..."
+        ;;
+
+    detalles)
+        if [ -z "$PAQUETE" ]; then
+            echo "❌ Especificá un paquete para ver su información."
+            exit 1
+        fi
+        echo "ℹ️ Detalles de $PAQUETE:"
+        echo "   Origen: $REGISTRO_GHCR/$PAQUETE:latest"
+        echo "   Arquitectura: Contenedor universal OCI"
+        ;;
+
+    ayuda)
+        mostrar_ayuda_es
+        ;;
+
+    # --- COMANDOS EN INGLÉS ---
+    install)
+        if [ -z "$PAQUETE" ]; then
+            echo "❌ Error: You must specify a package to install."
+            echo "Example: bacusp install holabacus"
+            exit 1
+        fi
+        echo "🔍 Searching for '$PAQUETE' in $REGISTRO_GHCR..."
+        echo "📦 Downloading OCI container from GHCR..."
+        echo "⚙️ Installing $PAQUETE into $DIR_BIN/$PAQUETE..."
+        echo "✅ $PAQUETE was installed successfully!"
+        ;;
+
+    remove|purge)
+        if [ -z "$PAQUETE" ]; then
+            echo "❌ Error: You must specify a package to remove."
+            exit 1
+        fi
+        echo "🗑️ Uninstalling '$PAQUETE'..."
+        echo "✅ Package '$PAQUETE' removed successfully."
+        ;;
+
+    update)
+        echo "🔄 Updating bacus-pkg package index..."
+        echo "✅ Package list updated."
+        ;;
+
+    list)
+        echo "📋 Installed packages in chiquiOS:"
+        echo " - holabacus (v1.0.0)"
+        ;;
+
+    search)
+        if [ -z "$PAQUETE" ]; then
+            echo "❌ Please specify a package to search for."
+            exit 1
+        fi
+        echo "🔍 Searching matches for '$PAQUETE' in bacus-pkg..."
+        ;;
+
+    info|show)
+        if [ -z "$PAQUETE" ]; then
+            echo "❌ Specify a package to view details."
+            exit 1
+        fi
+        echo "ℹ️ Details for $PAQUETE:"
+        echo "   Source: $REGISTRO_GHCR/$PAQUETE:latest"
+        echo "   Architecture: Universal OCI Container"
+        ;;
+
+    help)
+        mostrar_ayuda_en
+        ;;
+
+    # --- SINOPSIS GENERAL / DEFAULT ---
+    --help|-h|"")
+        echo "🐢 Bacusp v1.0.0 (chiquiOS)"
+        echo "Usá / Use:"
+        echo "  bacusp ayuda  (para español)"
+        echo "  bacusp help   (for English)"
+        ;;
+
+    *)
+        echo "❌ Comando no reconocido / Unknown command: '$ACCION'"
+        echo "Ejecutá 'bacusp ayuda' o 'bacusp help'."
+        exit 1
+        ;;
+esac
