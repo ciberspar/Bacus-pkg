@@ -1,7 +1,6 @@
 #!/bin/sh
 # ======================================================
 #  BACUSP v3.2 - Gestor Universal Multi-Entorno 🐢🌍
-#  Soporte: iOS (a-shell / chiquiOS) & Linux (Debian, Arch, Alpine, Fedora)
 # ======================================================
 
 ACCION=$1
@@ -51,9 +50,9 @@ instalar_paquete() {
     PKG=$1
     case "$ENTORNO" in
         ios)
-            echo "📱 [Bacusp / a-shell] Verificando '$PKG'..."
+            echo "📱 [Bacusp / chiquiOS] Verificando '$PKG'..."
             if command -v "$PKG" >/dev/null 2>&1; then
-                echo "⚡ El comando '$PKG' ya está disponible de forma nativa en a-shell."
+                echo "⚡ El comando '$PKG' ya está disponible de forma nativa en el sistema."
             else
                 echo "📦 Analizando paquete y dependencias WebAssembly para '$PKG':"
                 echo "   ├── $PKG (binario principal)"
@@ -64,7 +63,7 @@ instalar_paquete() {
                 if pkg install "$PKG"; then
                     echo "✅ ¡$PKG instalado con éxito por Bacusp!"
                 else
-                    echo "❌ Error: '$PKG' no existe en el repositorio pkg de a-shell."
+                    echo "❌ Error: '$PKG' no existe en el repositorio del sistema."
                 fi
             fi
             ;;
@@ -162,8 +161,6 @@ case "$ACCION" in
         SCRIPT_DIR=$(dirname "$0")
         if [ -f "$SCRIPT_DIR/../modules/clean.sh" ]; then
             sh "$SCRIPT_DIR/../modules/clean.sh"
-        elif [ -f "$HOME/Documents/a-Shell/bacus-pkg/modules/clean.sh" ]; then
-            sh "$HOME/Documents/a-Shell/bacus-pkg/modules/clean.sh"
         else
             echo "🧹 Limpiando caché temporal directamente..."
             rm -rf ~/.cache/* 2>/dev/null
@@ -175,8 +172,6 @@ case "$ACCION" in
         SCRIPT_DIR=$(dirname "$0")
         if [ -f "$SCRIPT_DIR/../modules/fetch.sh" ]; then
             sh "$SCRIPT_DIR/../modules/fetch.sh"
-        elif [ -f "$HOME/Documents/a-Shell/bacus-pkg/modules/fetch.sh" ]; then
-            sh "$HOME/Documents/a-Shell/bacus-pkg/modules/fetch.sh"
         else
             echo "🐢 Bacusp v3.2 corriendo en $ENTORNO"
         fi
