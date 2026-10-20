@@ -1,6 +1,6 @@
 #!/bin/sh
 # ======================================================
-#  BACUSP v3.3 - Gestor Universal Multi-Entorno 🐢🌍
+#  BACUSP v3.4 - Gestor Universal Multi-Entorno 🐢🌍
 # ======================================================
 
 ACCION=$1
