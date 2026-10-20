@@ -1,6 +1,6 @@
 #!/bin/sh
 # ======================================================
-#  BACUSP v3.4 - Gestor Universal Multi-Entorno 🐢🌍
+#  BACUSP v3.5 - Gestor Universal Multi-Entorno 🐢🌍
 # ======================================================
 
 ACCION=$1
@@ -52,13 +52,16 @@ instalar_paquete() {
         ios)
             echo "📱 Verificando '$PKG'..."
             if command -v "$PKG" >/dev/null 2>&1; then
-                echo "⚡ El comando '$PKG' ya está disponible."
+                echo "⚡ El comando '$PKG' ya está disponible de forma nativa."
             else
-                animar_barra "🚀 Desempaquetando componentes..."
-                if pkg install "$PKG"; then
-                    echo "✅ ¡$PKG instalado con éxito!"
+                # Ejecutar pkg install y capturar respuesta real
+                RES_PKG=$(pkg install "$PKG" 2>&1)
+                
+                if echo "$RES_PKG" | grep -iq "not found"; then
+                    echo "❌ Error: '$PKG' no existe en el repositorio de iOS."
                 else
-                    echo "❌ Error: '$PKG' no existe en el repositorio."
+                    animar_barra "🚀 Desempaquetando componentes..."
+                    echo "✅ ¡$PKG instalado con éxito!"
                 fi
             fi
             ;;
@@ -92,7 +95,7 @@ borrar_paquete() {
     esac
 }
 
-# --- ENRUTADOR DE COMANDOS MULTILINGÜE ---
+# --- ENRUTADOR DE COMANDOS ---
 case "$ACCION" in
     instalar|install|i)
         [ -z "$PAQUETE" ] && { echo "❌ Falta el paquete."; exit 1; }
@@ -115,19 +118,26 @@ case "$ACCION" in
         ;;
 
     upgrade|self-update)
+        echo "🔄 Buscando actualizaciones en GitHub..."
         RUTA_ACTUAL=$(pwd)
         REPO_DIR=""
-        [ -d "$HOME/Documents/bacus-pkg/.git" ] && REPO_DIR="$HOME/Documents/bacus-pkg"
         
+        # Detectar el directorio correcto del repositorio local
+        if [ -d "$HOME/Documents/bacus-pkg/.git" ]; then
+            REPO_DIR="$HOME/Documents/bacus-pkg"
+        elif [ -d "$HOME/Documents/bacus-pkg.git/.git" ]; then
+            REPO_DIR="$HOME/Documents/bacus-pkg.git"
+        fi
+
         if [ -n "$REPO_DIR" ]; then
             cd "$REPO_DIR" || exit
             git pull origin main
             cp bin/bacusp ~/Documents/bacusp
             chmod +x ~/Documents/bacusp
             cd "$RUTA_ACTUAL" || exit
-            echo "✨ ¡Bacusp actualizado!"
+            echo "✨ ¡Bacusp se ha actualizado a la última versión!"
         else
-            echo "❌ No se encontró el repositorio local."
+            echo "❌ No se encontró la carpeta del repositorio Git local."
         fi
         ;;
 
@@ -156,6 +166,8 @@ case "$ACCION" in
         SCRIPT_DIR=$(dirname "$0")
         if [ -f "$SCRIPT_DIR/../modules/clean.sh" ]; then
             sh "$SCRIPT_DIR/../modules/clean.sh"
+        elif [ -f "$HOME/Documents/bacus-pkg/modules/clean.sh" ]; then
+            sh "$HOME/Documents/bacus-pkg/modules/clean.sh"
         else
             rm -rf ~/.cache/* 2>/dev/null
             echo "✅ Caché limpia."
@@ -166,13 +178,15 @@ case "$ACCION" in
         SCRIPT_DIR=$(dirname "$0")
         if [ -f "$SCRIPT_DIR/../modules/fetch.sh" ]; then
             sh "$SCRIPT_DIR/../modules/fetch.sh"
+        elif [ -f "$HOME/Documents/bacus-pkg/modules/fetch.sh" ]; then
+            sh "$HOME/Documents/bacus-pkg/modules/fetch.sh"
         else
-            echo "🐢 Bacusp v3.3 ($ENTORNO)"
+            echo "🐢 Bacusp v3.5 ($ENTORNO)"
         fi
         ;;
 
     ayuda|help|--help|-h|"")
-        echo "🐢 Bacusp v3.3 - Gestor Universal"
+        echo "🐢 Bacusp v3.5 - Gestor Universal"
         echo "Uso: bacusp <comando> [paquete]"
         echo ""
         echo "Comandos:"
