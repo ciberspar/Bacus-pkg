@@ -28,6 +28,10 @@
     "python3": {
       "nombre": "python3",
       "descripcion": "Entorno de ejecución y lenguaje Python 3"
+    },
+    "firefox": {
+       "nombre": "firefox",
+       "descripcion": "Navegador de linux que trae todos los linux"
     }
   }
 }
