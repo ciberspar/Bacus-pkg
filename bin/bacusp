@@ -1,40 +1,40 @@
 #!/bin/bash
 # ======================================================
-#  BACUSP v2.0 - Gestor Universal con Repos de la Comunidad 🐢
+#  BACUSP v2.1 - Gestor con Base Debian para chiquiOS 🐢
 # ======================================================
 
 ACCION=$1
 PAQUETE=$2
 
-# --- INSTALADOR USANDO REPOS GLOBALES Y DE LA COMUNIDAD ---
-instalar_desde_comunidad() {
+# --- MOTOR PRINCIPAL: DEBIAN & REPOS GLOBALES ---
+instalar_paquete() {
     PKG=$1
-    echo "🔍 [Bacusp] Buscando '$PKG' en los repositorios oficiales y de la comunidad..."
+    echo "🔍 [Bacusp] Buscando '$PKG' en los repositorios de Debian..."
     
-    if command -v apk >/dev/null 2>&1; then
-        echo "🐧 [Alpine / chiquiOS] Consultando repos main & community..."
+    if command -v apt-get >/dev/null 2>&1; then
+        echo "🌀 [Debian Base] Instalando '$PKG' desde APT..."
+        sudo apt-get update -y && sudo apt-get install -y "$PKG"
+    elif command -v apk >/dev/null 2>&1; then
+        echo "🐧 [Alpine Fallback] Instalando vía apk..."
         apk add --no-cache "$PKG"
-    elif command -v apt-get >/dev/null 2>&1; then
-        echo "🐧 [Debian / Ubuntu] Consultando repos oficiales y universe..."
-        sudo apt-get update && sudo apt-get install -y "$PKG"
     elif command -v pacman >/dev/null 2>&1; then
-        echo "🐧 [Arch Linux] Consultando repos Core, Extra & AUR..."
+        echo "🐧 [Arch Fallback] Instalando vía pacman..."
         sudo pacman -S --noconfirm "$PKG"
     elif command -v dnf >/dev/null 2>&1; then
-        echo "🐧 [Fedora / RHEL] Consultando repos de la comunidad..."
+        echo "🐧 [Fedora Fallback] Instalando vía dnf..."
         sudo dnf install -y "$PKG"
     else
-        echo "❌ No se encontró un gestor de paquetes compatible en este sistema."
+        echo "❌ No se encontró gestor de paquetes soportado."
         exit 1
     fi
 }
 
 borrar_paquete() {
     PKG=$1
-    if command -v apk >/dev/null 2>&1; then
-        apk del "$PKG"
-    elif command -v apt-get >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
         sudo apt-get remove -y "$PKG"
+    elif command -v apk >/dev/null 2>&1; then
+        apk del "$PKG"
     elif command -v pacman >/dev/null 2>&1; then
         sudo pacman -R --noconfirm "$PKG"
     elif command -v dnf >/dev/null 2>&1; then
@@ -42,15 +42,14 @@ borrar_paquete() {
     fi
 }
 
-# --- LÓGICA DE COMANDOS ---
 case "$ACCION" in
     instalar|install)
         if [ -z "$PAQUETE" ]; then
-            echo "❌ Especificá un paquete. Ejemplo: bacusp instalar firefox"
+            echo "❌ Especificá un paquete. Ejemplo: bacusp instalar firefox-esr"
             exit 1
         fi
-        instalar_comunidad "$PAQUETE"
-        echo "✅ ¡$PAQUETE procesado con éxito por Bacusp!"
+        instalar_paquete "$PAQUETE"
+        echo "✅ ¡$PAQUETE instalado con éxito en chiquiOS!"
         ;;
 
     borrar|remove)
@@ -60,43 +59,50 @@ case "$ACCION" in
         fi
         echo "🗑️ Desinstalando '$PAQUETE'..."
         borrar_paquete "$PAQUETE"
-        echo "✅ Paquete removido."
+        echo "✅ Paquete desinstalado."
         ;;
 
     actualizar|update)
-        echo "🔄 Sincronizando listas de los repositorios de la comunidad..."
-        if command -v apk >/dev/null 2>&1; then
-            apk update
-        elif command -v apt-get >/dev/null 2>&1; then
+        echo "🔄 Actualizando catálogo oficial de Debian..."
+        if command -v apt-get >/dev/null 2>&1; then
             sudo apt-get update
-        elif command -v pacman >/dev/null 2>&1; then
-            sudo pacman -Sy
+        elif command -v apk >/dev/null 2>&1; then
+            apk update
         fi
         echo "✅ Repositorios sincronizados."
         ;;
 
+    buscar|search)
+        if [ -z "$PAQUETE" ]; then
+            echo "❌ Especificá qué buscar. Ejemplo: bacusp buscar nmap"
+            exit 1
+        fi
+        echo "🔍 Buscando '$PAQUETE' en los repositorios de Debian..."
+        if command -v apt-cache >/dev/null 2>&1; then
+            apt-cache search "$PAQUETE" | head -n 20
+        fi
+        ;;
+
     listar|list)
-        echo "📋 Programas instalados en el sistema:"
-        if command -v apk >/dev/null 2>&1; then
-            apk info
-        elif command -v apt-get >/dev/null 2>&1; then
+        echo "📋 Programas Debian instalados:"
+        if command -v dpkg >/dev/null 2>&1; then
             dpkg -l | grep '^ii' | awk '{print $2}' | head -n 35
         fi
         ;;
 
     ayuda|help|--help|-h|"")
-        echo "🐢 Bacusp v2.0 - chiquiOS Package Manager"
+        echo "🐢 Bacusp v2.1 (Debian Base Engine - chiquiOS)"
         echo "Uso: bacusp <comando> [paquete]"
         echo ""
-        echo "Comandos (ES/EN):"
-        echo "  actualizar / update        Actualiza las listas de los repos globales"
-        echo "  instalar   / install <pkg> Instala cualquier app desde la comunidad"
-        echo "  borrar     / remove  <pkg> Desinstala una aplicación"
-        echo "  listar     / list          Muestra las apps instaladas"
+        echo "Comandos:"
+        echo "  actualizar / update        Actualiza la lista de repositorios Debian"
+        echo "  buscar     / search <kw>   Buca programas en todo el catálogo Debian"
+        echo "  instalar   / install <pkg> Instala un paquete .deb oficial"
+        echo "  borrar     / remove  <pkg> Desinstala una app"
+        echo "  listar     / list          Lista las apps instaladas"
         ;;
 
     *)
         echo "❌ Comando desconocido: '$ACCION'"
-        echo "Usá 'bacusp ayuda' para ver las opciones disponibles."
         ;;
 esac
