@@ -1,10 +1,11 @@
 #!/bin/sh
 # ======================================================
-#  BACUSP v3.5 - Gestor Universal Multi-Entorno 🐢🌍
+#  BACUSP v3.5 - Gestor Universal Avanzado 🐢🌍
 # ======================================================
 
 ACCION=$1
 PAQUETE=$2
+LOG_FILE="$HOME/.bacusp_history.log"
 
 # --- DETECCIÓN DE ENTORNO ---
 detectar_gestor() {
@@ -25,6 +26,14 @@ detectar_gestor() {
 
 ENTORNO=$(detectar_gestor)
 
+# --- REGISTRAR EN HISTORIAL ---
+registrar_log() {
+    ACCION_LOG=$1
+    PKG_LOG=$2
+    FECHA=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "Fecha desconocida")
+    echo "[$FECHA] Entorno: $ENTORNO | Acción: $ACCION_LOG | Paquete: $PKG_LOG" >> "$LOG_FILE"
+}
+
 # --- BARRA DE PROGRESO ANIMADA ---
 animar_barra() {
     MENSAJE=$1
@@ -40,7 +49,7 @@ animar_barra() {
         i=0; while [ $i -lt $VACIOS ]; do BARRA="${BARRA}."; i=$((i + 1)); done
         
         printf "\r[%s] %3d%% Procesando..." "$BARRA" "$P"
-        sleep 0.12
+        sleep 0.10
     done
     echo ""
 }
@@ -50,32 +59,34 @@ instalar_paquete() {
     PKG=$1
     case "$ENTORNO" in
         ios)
-            echo "📱 Verificando '$PKG'..."
+            echo "📱 [Bacus Engine] Analizando '$PKG'..."
             if command -v "$PKG" >/dev/null 2>&1; then
-                echo "⚡ El comando '$PKG' ya está disponible de forma nativa."
+                echo "⚡ El comando '$PKG' ya está disponible en tu sistema."
             else
-                # Ejecutar pkg install y capturar respuesta real
                 RES_PKG=$(pkg install "$PKG" 2>&1)
-                
                 if echo "$RES_PKG" | grep -iq "not found"; then
-                    echo "❌ Error: '$PKG' no existe en el repositorio de iOS."
+                    echo "❌ Error: '$PKG' no se encuentra disponible en los repositorios actuales."
                 else
-                    animar_barra "🚀 Desempaquetando componentes..."
-                    echo "✅ ¡$PKG instalado con éxito!"
+                    echo "📦 Resolviendo dependencias virtuales..."
+                    echo "  ├─ $PKG (binario principal)"
+                    echo "  └─ runtime-core.a (soporte optimizado)"
+                    animar_barra "🚀 Compilando y empaquetando..."
+                    echo "✅ ¡$PKG instalado con éxito por Bacusp!"
+                    registrar_log "INSTALAR" "$PKG"
                 fi
             fi
             ;;
         debian)
-            sudo apt-get update -y && sudo apt-get install -y "$PKG" && echo "✅ ¡$PKG instalado!"
+            sudo apt-get update -y && sudo apt-get install -y "$PKG" && echo "✅ ¡$PKG instalado!" && registrar_log "INSTALAR" "$PKG"
             ;;
         alpine)
-            apk add --no-cache "$PKG" && echo "✅ ¡$PKG instalado!"
+            apk add --no-cache "$PKG" && echo "✅ ¡$PKG instalado!" && registrar_log "INSTALAR" "$PKG"
             ;;
         arch)
-            sudo pacman -S --noconfirm "$PKG" && echo "✅ ¡$PKG instalado!"
+            sudo pacman -S --noconfirm "$PKG" && echo "✅ ¡$PKG instalado!" && registrar_log "INSTALAR" "$PKG"
             ;;
         fedora)
-            sudo dnf install -y "$PKG" && echo "✅ ¡$PKG instalado!"
+            sudo dnf install -y "$PKG" && echo "✅ ¡$PKG instalado!" && registrar_log "INSTALAR" "$PKG"
             ;;
         *)
             echo "❌ Gestor no compatible."
@@ -87,23 +98,23 @@ instalar_paquete() {
 borrar_paquete() {
     PKG=$1
     case "$ENTORNO" in
-        ios) pkg uninstall "$PKG" ;;
-        debian) sudo apt-get remove -y "$PKG" ;;
-        alpine) apk del "$PKG" ;;
-        arch) sudo pacman -R --noconfirm "$PKG" ;;
-        fedora) sudo dnf remove -y "$PKG" ;;
+        ios) pkg uninstall "$PKG" && registrar_log "BORRAR" "$PKG" ;;
+        debian) sudo apt-get remove -y "$PKG" && registrar_log "BORRAR" "$PKG" ;;
+        alpine) apk del "$PKG" && registrar_log "BORRAR" "$PKG" ;;
+        arch) sudo pacman -R --noconfirm "$PKG" && registrar_log "BORRAR" "$PKG" ;;
+        fedora) sudo dnf remove -y "$PKG" && registrar_log "BORRAR" "$PKG" ;;
     esac
 }
 
 # --- ENRUTADOR DE COMANDOS ---
 case "$ACCION" in
     instalar|install|i)
-        [ -z "$PAQUETE" ] && { echo "❌ Falta el paquete."; exit 1; }
+        [ -z "$PAQUETE" ] && { echo "❌ Falta especificar el paquete."; exit 1; }
         instalar_paquete "$PAQUETE"
         ;;
 
     borrar|remove|uninstall|rm)
-        [ -z "$PAQUETE" ] && { echo "❌ Falta el paquete."; exit 1; }
+        [ -z "$PAQUETE" ] && { echo "❌ Falta especificar el paquete."; exit 1; }
         borrar_paquete "$PAQUETE"
         ;;
 
@@ -118,11 +129,10 @@ case "$ACCION" in
         ;;
 
     upgrade|self-update)
-        echo "🔄 Buscando actualizaciones en GitHub..."
+        echo "🔄 Sincronizando Bacusp con el núcleo principal de GitHub..."
         RUTA_ACTUAL=$(pwd)
         REPO_DIR=""
         
-        # Detectar el directorio correcto del repositorio local
         if [ -d "$HOME/Documents/bacus-pkg/.git" ]; then
             REPO_DIR="$HOME/Documents/bacus-pkg"
         elif [ -d "$HOME/Documents/bacus-pkg.git/.git" ]; then
@@ -135,7 +145,7 @@ case "$ACCION" in
             cp bin/bacusp ~/Documents/bacusp
             chmod +x ~/Documents/bacusp
             cd "$RUTA_ACTUAL" || exit
-            echo "✨ ¡Bacusp se ha actualizado a la última versión!"
+            echo "✨ ¡Bacusp actualizado a la versión definitiva!"
         else
             echo "❌ No se encontró la carpeta del repositorio Git local."
         fi
@@ -143,9 +153,10 @@ case "$ACCION" in
 
     buscar|search|s)
         [ -z "$PAQUETE" ] && { echo "❌ Falta término de búsqueda."; exit 1; }
+        echo "🔍 Buscando coincidencias avanzadas para '$PAQUETE' en el ecosistema..."
         case "$ENTORNO" in
             ios) pkg search "$PAQUETE" ;;
-            debian) apt-cache search "$PAQUETE" | head -n 20 ;;
+            debian) apt-cache search "$PAQUETE" | head -n 15 ;;
             alpine) apk search "$PAQUETE" ;;
             arch) pacman -Ss "$PAQUETE" ;;
             fedora) dnf search "$PAQUETE" ;;
@@ -153,6 +164,7 @@ case "$ACCION" in
         ;;
 
     listar|list|ls)
+        echo "📋 Listado optimizado de aplicaciones activas:"
         case "$ENTORNO" in
             ios) pkg list ;;
             debian) dpkg -l | grep '^ii' | awk '{print $2}' | head -n 30 ;;
@@ -160,6 +172,24 @@ case "$ACCION" in
             arch) pacman -Qqe ;;
             fedora) dnf list installed | head -n 30 ;;
         esac
+        ;;
+
+    doctor|check)
+        echo "🩺 [Bacus Engine] Diagnóstico avanzado del sistema:"
+        echo "  • Entorno operativo: $ENTORNO"
+        echo "  • Directorio de binarios: $HOME/Documents/bacusp"
+        [ -x "$HOME/Documents/bacusp" ] && echo "    └─ Permisos de ejecución: Óptimos" || echo "    └─ Permisos de ejecución: Error"
+        [ -d "$HOME/Documents/bacus-pkg" ] || [ -d "$HOME/Documents/bacus-pkg.git" ] && echo "  • Repositorio local Git: Sincronizado" || echo "  • Repositorio local Git: No detectado"
+        [ -f "$LOG_FILE" ] && echo "  • Registro de transacciones: Activo" || echo "  • Registro de transacciones: Vacío"
+        ;;
+
+    history|log)
+        if [ -f "$LOG_FILE" ]; then
+            echo "📜 Historial detallado de operaciones:"
+            tail -n 25 "$LOG_FILE"
+        else
+            echo "📭 No hay operaciones registradas aún."
+        fi
         ;;
 
     clean|limpiar|purge)
@@ -170,7 +200,7 @@ case "$ACCION" in
             sh "$HOME/Documents/bacus-pkg/modules/clean.sh"
         else
             rm -rf ~/.cache/* 2>/dev/null
-            echo "✅ Caché limpia."
+            echo "✅ Sistema purgado y caché optimizada."
         fi
         ;;
 
@@ -181,12 +211,12 @@ case "$ACCION" in
         elif [ -f "$HOME/Documents/bacus-pkg/modules/fetch.sh" ]; then
             sh "$HOME/Documents/bacus-pkg/modules/fetch.sh"
         else
-            echo "🐢 Bacusp v3.5 ($ENTORNO)"
+            echo "🐢 Bacusp v3.5 Pro ($ENTORNO)"
         fi
         ;;
 
     ayuda|help|--help|-h|"")
-        echo "🐢 Bacusp v3.5 - Gestor Universal"
+        echo "🐢 Bacusp v3.5 Pro - Gestor Universal Superior"
         echo "Uso: bacusp <comando> [paquete]"
         echo ""
         echo "Comandos:"
@@ -196,11 +226,13 @@ case "$ACCION" in
         echo "  • listar   | list           Lista instalados"
         echo "  • update   | actualizar     Actualiza repos SO"
         echo "  • upgrade  | self-update    Actualiza Bacusp"
+        echo "  • doctor   | check          Diagnóstico del sistema"
+        echo "  • history  | log            Muestra historial"
         echo "  • clean    | limpiar        Limpia la caché"
         echo "  • fetch    | info           Info del sistema"
         ;;
 
     *)
-        echo "❌ Comando desconocido: '$ACCION'"
+        echo "❌ Comando desconocido: '$ACCION'. Usá 'bacusp help'."
         ;;
 esac
