@@ -1,6 +1,7 @@
 #!/bin/sh
 # ======================================================
-#  BACUSP v3.2 - Gestor Universal Multi-Entorno 🐢🌍
+#  BACUSP v3.3 - Gestor Universal Multi-Entorno 🐢🌍
+#  Soporte: iOS (chiquiOS) & Linux (Debian, Arch, Alpine, Fedora)
 # ======================================================
 
 ACCION=$1
@@ -131,6 +132,34 @@ case "$ACCION" in
         esac
         ;;
 
+    upgrade|actualizar-sistema|self-update)
+        echo "🔄 Buscando actualizaciones de bacus-pkg en GitHub..."
+        RUTA_ACTUAL=$(pwd)
+        
+        # Busca el repositorio local para hacer git pull
+        REPO_DIR=""
+        if [ -d "$HOME/Documents/a-Shell/bacus-pkg/.git" ]; then
+            REPO_DIR="$HOME/Documents/a-Shell/bacus-pkg"
+        elif [ -d "$HOME/Documents/bacus-pkg/.git" ]; then
+            REPO_DIR="$HOME/Documents/bacus-pkg"
+        fi
+
+        if [ -n "$REPO_DIR" ]; then
+            cd "$REPO_DIR" || exit
+            echo "📥 Descargando los últimos cambios desde GitHub..."
+            git pull origin main
+            
+            echo "⚙️ Sincronizando binario ejecutable local..."
+            cp bin/bacusp ~/Documents/bacusp
+            chmod +x ~/Documents/bacusp
+            
+            cd "$RUTA_ACTUAL" || exit
+            echo "✨ ¡Bacusp se ha actualizado correctamente en el sistema!"
+        else
+            echo "❌ No se encontró la carpeta del repositorio Git local."
+        fi
+        ;;
+
     buscar|search|s)
         if [ -z "$PAQUETE" ]; then
             echo "❌ Especificá qué buscar / Specify search query."
@@ -161,6 +190,8 @@ case "$ACCION" in
         SCRIPT_DIR=$(dirname "$0")
         if [ -f "$SCRIPT_DIR/../modules/clean.sh" ]; then
             sh "$SCRIPT_DIR/../modules/clean.sh"
+        elif [ -f "$HOME/Documents/a-Shell/bacus-pkg/modules/clean.sh" ]; then
+            sh "$HOME/Documents/a-Shell/bacus-pkg/modules/clean.sh"
         else
             echo "🧹 Limpiando caché temporal directamente..."
             rm -rf ~/.cache/* 2>/dev/null
@@ -172,20 +203,23 @@ case "$ACCION" in
         SCRIPT_DIR=$(dirname "$0")
         if [ -f "$SCRIPT_DIR/../modules/fetch.sh" ]; then
             sh "$SCRIPT_DIR/../modules/fetch.sh"
+        elif [ -f "$HOME/Documents/a-Shell/bacus-pkg/modules/fetch.sh" ]; then
+            sh "$HOME/Documents/a-Shell/bacus-pkg/modules/fetch.sh"
         else
-            echo "🐢 Bacusp v3.2 corriendo en $ENTORNO"
+            echo "🐢 Bacusp v3.3 corriendo en $ENTORNO"
         fi
         ;;
 
     ayuda|help|--help|-h|"")
-        echo "🐢 Bacusp v3.2 - Gestor Universal (Linux & iOS)"
+        echo "🐢 Bacusp v3.3 - Gestor Universal (Linux & iOS)"
         echo "Uso / Usage: bacusp <comando> [paquete]"
         echo ""
         echo "Comandos soportados (Soporte Bilingüe):"
         echo "  • instalar / install <pkg>  : Instala un paquete con barra de progreso"
         echo "  • borrar / remove <pkg>     : Desinstala un paquete"
         echo "  • buscar / search <texto>   : Busca en los repositorios"
-        echo "  • actualizar / update       : Actualiza las listas de software"
+        echo "  • actualizar / update       : Actualiza la lista de software del SO"
+        echo "  • upgrade / self-update     : Actualiza Bacusp a la última versión desde GitHub"
         echo "  • listar / list             : Muestra paquetes instalados"
         echo "  • clean / limpiar           : Borra cachés y temporales con reporte"
         echo "  • fetch / info              : Muestra el logo y datos de la distro/iOS"
