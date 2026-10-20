@@ -1,15 +1,36 @@
-name: Publicar Paquete en GHCR
+name: Compilar y Publicar Paquetes Automáticos
 
 on:
   push:
     branches: [ "main", "master" ]
 
 jobs:
-  build-and-push:
+  detectar-paquetes:
+    runs-on: ubuntu-latest
+    outputs:
+      paquetes: ${{ steps.set-matrix.outputs.paquetes }}
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Detectar carpetas de paquetes
+        id: set-matrix
+        run: |
+          # Busca carpetas dentro de 'paquetes/' que tengan Dockerfile
+          cd paquetes 2>/dev/null || mkdir -p . && cd .
+          PAQUETES=$(find . -maxdepth 2 -name "Dockerfile" | sed 's|/Dockerfile||' | sed 's|^\./||' | jq -R -s -c 'split("\n")[:-1]')
+          echo "Paquetes encontrados: $PAQUETES"
+          echo "paquetes=$PAQUETES" >> $GITHUB_OUTPUT
+
+  construir-y-subir:
+    needs: detectar-paquetes
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        paquete: ${{ fromJson(needs.detectar-paquetes.outputs.paquetes) }}
 
     steps:
       - name: Checkout del repositorio
@@ -22,16 +43,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Bajar a minúsculas el nombre del usuario y repo para Docker
+      - name: Lowercase repo name
         id: string_case
         uses: ASzc/change-string-case-action@v6
         with:
           string: ${{ github.repository }}
 
-      - name: Construir y subir imagen a GHCR
+      - name: Construir y subir imagen del paquete
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./paquetes/${{ matrix.paquete }}
           push: true
           tags: |
-            ghcr.io/${{ steps.string_case.outputs.lowercase }}:latest
+            ghcr.io/${{ steps.string_case.outputs.lowercase }}/${{ matrix.paquete }}:latest
