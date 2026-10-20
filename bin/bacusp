@@ -1,6 +1,6 @@
 #!/bin/sh
 # ======================================================
-#  BACUSP v3.5 Pro - Gestor Universal con Sandbox Real 🐢🌍
+#  BACUSP v3.6 - Gestor Universal con Sandbox Real 🐢🌍
 # ======================================================
 
 ACCION=$1
