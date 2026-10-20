@@ -1,0 +1,33 @@
+{
+  "version": "1.0.0",
+  "paquetes": {
+    "htop": {
+      "nombre": "htop",
+      "descripcion": "Monitor de procesos del sistema en tiempo real"
+    },
+    "nmap": {
+      "nombre": "nmap",
+      "descripcion": "Escáner de puertos y auditoría de seguridad en red"
+    },
+    "speedtest-cli": {
+      "nombre": "speedtest-cli",
+      "descripcion": "Test de velocidad de internet desde la consola"
+    },
+    "neofetch": {
+      "nombre": "neofetch",
+      "descripcion": "Muestra las especificaciones e info de chiquiOS"
+    },
+    "curl": {
+      "nombre": "curl",
+      "descripcion": "Herramienta para transferir datos por HTTP/HTTPS"
+    },
+    "nano": {
+      "nombre": "nano",
+      "descripcion": "Editor de texto sencillo para terminal"
+    },
+    "python3": {
+      "nombre": "python3",
+      "descripcion": "Entorno de ejecución y lenguaje Python 3"
+    }
+  }
+}
