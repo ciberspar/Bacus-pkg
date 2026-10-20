@@ -1,6 +1,6 @@
 #!/bin/sh
 # ======================================================
-#  BACUSP v3.0 - Gestor Universal (Linux & iOS/a-shell) 🐢🌍
+#  BACUSP v3.1 - Gestor Universal (Linux & iOS/a-shell) 🐢🌍
 # ======================================================
 
 ACCION=$1
@@ -30,24 +30,34 @@ instalar_paquete() {
     PKG=$1
     case "$ENTORNO" in
         ios)
-            echo "📱 [Bacusp / a-shell] Instalando '$PKG' vía pkg..."
-            pkg install "$PKG"
+            echo "📱 [Bacusp / a-shell] Verificando '$PKG'..."
+            # Si el comando ya existe en a-shell
+            if command -v "$PKG" >/dev/null 2>&1; then
+                echo "⚡ '$PKG' ya está disponible de forma nativa en a-shell."
+            else
+                echo "📦 Intentando instalar '$PKG' vía pkg..."
+                if pkg install "$PKG"; then
+                    echo "✅ ¡$PKG instalado con éxito por Bacusp!"
+                else
+                    echo "❌ Error: '$PKG' no existe en el repo de pkg de a-shell."
+                fi
+            fi
             ;;
         debian)
             echo "🌀 [Bacusp / Debian] Instalando '$PKG' vía APT..."
-            sudo apt-get update -y && sudo apt-get install -y "$PKG"
+            sudo apt-get update -y && sudo apt-get install -y "$PKG" && echo "✅ ¡$PKG instalado!"
             ;;
         alpine)
             echo "🐧 [Bacusp / Alpine] Instalando '$PKG' vía apk..."
-            apk add --no-cache "$PKG"
+            apk add --no-cache "$PKG" && echo "✅ ¡$PKG instalado!"
             ;;
         arch)
             echo "🏹 [Bacusp / Arch] Instalando '$PKG' vía pacman..."
-            sudo pacman -S --noconfirm "$PKG"
+            sudo pacman -S --noconfirm "$PKG" && echo "✅ ¡$PKG instalado!"
             ;;
         fedora)
             echo "🎩 [Bacusp / Fedora] Instalando '$PKG' vía dnf..."
-            sudo dnf install -y "$PKG"
+            sudo dnf install -y "$PKG" && echo "✅ ¡$PKG instalado!"
             ;;
         *)
             echo "❌ No se encontró un gestor compatible en este sistema."
@@ -56,27 +66,14 @@ instalar_paquete() {
     esac
 }
 
-# --- FUNCIONES DE BORRADO ---
-borrar_paquete() {
-    PKG=$1
-    case "$ENTORNO" in
-        ios) pkg uninstall "$PKG" ;;
-        debian) sudo apt-get remove -y "$PKG" ;;
-        alpine) apk del "$PKG" ;;
-        arch) sudo pacman -R --noconfirm "$PKG" ;;
-        fedora) sudo dnf remove -y "$PKG" ;;
-    esac
-}
-
 # --- LÓGICA DE COMANDOS ---
 case "$ACCION" in
     instalar|install)
         if [ -z "$PAQUETE" ]; then
-            echo "❌ Especificá un paquete. Ejemplo: bacusp instalar curl"
+            echo "❌ Especificá un paquete. Ejemplo: bacusp instalar git"
             exit 1
         fi
         instalar_paquete "$PAQUETE"
-        echo "✅ ¡$PAQUETE procesado por Bacusp!"
         ;;
 
     borrar|remove)
@@ -85,12 +82,17 @@ case "$ACCION" in
             exit 1
         fi
         echo "🗑️ Desinstalando '$PAQUETE'..."
-        borrar_paquete "$PAQUETE"
-        echo "✅ Paquete removido."
+        case "$ENTORNO" in
+            ios) pkg uninstall "$PAQUETE" ;;
+            debian) sudo apt-get remove -y "$PAQUETE" ;;
+            alpine) apk del "$PAQUETE" ;;
+            arch) sudo pacman -R --noconfirm "$PAQUETE" ;;
+            fedora) sudo dnf remove -y "$PAQUETE" ;;
+        esac
         ;;
 
     actualizar|update)
-        echo "🔄 Sincronizando repositorios para el entorno: $ENTORNO..."
+        echo "🔄 Sincronizando repositorios ($ENTORNO)..."
         case "$ENTORNO" in
             ios) pkg update ;;
             debian) sudo apt-get update ;;
@@ -98,7 +100,6 @@ case "$ACCION" in
             arch) sudo pacman -Sy ;;
             fedora) sudo dnf check-update ;;
         esac
-        echo "✅ Repositorios actualizados."
         ;;
 
     buscar|search)
@@ -112,7 +113,6 @@ case "$ACCION" in
             debian) apt-cache search "$PAQUETE" | head -n 20 ;;
             alpine) apk search "$PAQUETE" ;;
             arch) pacman -Ss "$PAQUETE" ;;
-            *) echo "Búsqueda no soportada en este entorno." ;;
         esac
         ;;
 
@@ -123,24 +123,16 @@ case "$ACCION" in
             debian) dpkg -l | grep '^ii' | awk '{print $2}' | head -n 30 ;;
             alpine) apk info ;;
             arch) pacman -Qqe ;;
-            *) echo "Listado no disponible." ;;
         esac
         ;;
 
     ayuda|help|--help|-h|"")
-        echo "🐢 Bacusp v3.0 - Gestor Universal (Linux & iOS)"
+        echo "🐢 Bacusp v3.1 - Gestor Universal (Linux & iOS)"
         echo "Uso: bacusp <comando> [paquete]"
-        echo ""
-        echo "Comandos:"
-        echo "  actualizar / update        Sincroniza los repos del sistema actual"
-        echo "  buscar     / search <kw>   Busca programas"
-        echo "  instalar   / install <pkg> Instala una aplicación"
-        echo "  borrar     / remove  <pkg> Desinstala una aplicación"
-        echo "  listar     / list          Muestra las apps instaladas"
+        echo "Comandos: instalar, borrar, actualizar, buscar, listar"
         ;;
 
     *)
         echo "❌ Comando desconocido: '$ACCION'"
-        echo "Usá 'bacusp ayuda' para ver las opciones."
         ;;
 esac
