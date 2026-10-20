@@ -1,6 +1,7 @@
 #!/bin/sh
 # ======================================================
-#  BACUSP v3.2 - Gestor Universal con Barra & Clean 🐢🌍
+#  BACUSP v3.2 - Gestor Universal Multi-Entorno 🐢🌍
+#  Soporte: iOS (a-shell / chiquiOS) & Linux (Debian, Arch, Alpine, Fedora)
 # ======================================================
 
 ACCION=$1
@@ -25,12 +26,11 @@ detectar_gestor() {
 
 ENTORNO=$(detectar_gestor)
 
-# --- BARRA DE PROGRESO TIPO APT ---
+# --- BARRA DE PROGRESO ANIMADA ---
 animar_barra() {
     MENSAJE=$1
     echo "$MENSAJE"
     
-    # Simulación de pasos de instalación al estilo APT
     PASOS="10 30 55 80 100"
     for P in $PASOS; do
         BARRA=""
@@ -40,38 +40,37 @@ animar_barra() {
         i=0; while [ $i -lt $LLENOS ]; do BARRA="${BARRA}#"; i=$((i + 1)); done
         i=0; while [ $i -lt $VACIOS ]; do BARRA="${BARRA}."; i=$((i + 1)); done
         
-        printf "\r[%s] %3d%% Cargando componentes..." "$BARRA" "$P"
-        sleep 0.15
+        printf "\r[%s] %3d%% Procesando / Processing..." "$BARRA" "$P"
+        sleep 0.12
     done
     echo ""
 }
 
-# --- FUNCIONES DE INSTALACIÓN ---
+# --- FUNCIONES DE INSTALACIÓN Y GESTIÓN ---
 instalar_paquete() {
     PKG=$1
     case "$ENTORNO" in
         ios)
-            echo "📱 [Bacusp / a-shell] Analizando '$PKG' y dependencias..."
+            echo "📱 [Bacusp / a-shell] Verificando '$PKG'..."
             if command -v "$PKG" >/dev/null 2>&1; then
-                echo "⚡ El comando '$PKG' ya se encuentra disponible de forma nativa en a-shell."
+                echo "⚡ El comando '$PKG' ya está disponible de forma nativa en a-shell."
             else
-                echo "📦 Preparando árbol de librerías para '$PKG':"
-                echo "   ├── $PKG (paquete principal)"
-                echo "   └── libwasm-$PKG.a (runtime WebAssembly)"
+                echo "📦 Analizando paquete y dependencias WebAssembly para '$PKG':"
+                echo "   ├── $PKG (binario principal)"
+                echo "   └── libwasm-$PKG.a (runtime)"
                 
-                animar_barra "🚀 Desempaquetando e instalando componentes en iOS..."
+                animar_barra "🚀 Desempaquetando componentes..."
                 
                 if pkg install "$PKG"; then
-                    echo "✅ ¡Librerías y binarios de '$PKG' instalados correctamente por Bacusp!"
+                    echo "✅ ¡$PKG instalado con éxito por Bacusp!"
                 else
-                    echo "❌ Error: '$PKG' no se encuentra en el repositorio de pkg de a-shell."
+                    echo "❌ Error: '$PKG' no existe en el repositorio pkg de a-shell."
                 fi
             fi
             ;;
         debian)
-            echo "🌀 [Bacusp / Debian] Leyendo lista de paquetes y librerías..."
-            sudo apt-get update -y
-            sudo apt-get install -y "$PKG" && echo "✅ ¡$PKG y sus librerías asociadas han sido instalados!"
+            echo "🌀 [Bacusp / Debian] Actualizando e instalando '$PKG'..."
+            sudo apt-get update -y && sudo apt-get install -y "$PKG" && echo "✅ ¡$PKG instalado correctamente!"
             ;;
         alpine)
             echo "🐧 [Bacusp / Alpine] Instalando '$PKG' vía apk..."
@@ -82,7 +81,7 @@ instalar_paquete() {
             sudo pacman -S --noconfirm "$PKG" && echo "✅ ¡$PKG instalado!"
             ;;
         fedora)
-            echo "🎩 [Bacusp / Fedora] Instalando '$PKG'..."
+            echo "🎩 [Bacusp / Fedora] Instalando '$PKG' vía dnf..."
             sudo dnf install -y "$PKG" && echo "✅ ¡$PKG instalado!"
             ;;
         *)
@@ -92,33 +91,38 @@ instalar_paquete() {
     esac
 }
 
-# --- LÓGICA DE COMANDOS ---
+borrar_paquete() {
+    PKG=$1
+    echo "🗑️ Removiendo / Removing '$PKG' ($ENTORNO)..."
+    case "$ENTORNO" in
+        ios) pkg uninstall "$PKG" ;;
+        debian) sudo apt-get remove -y "$PKG" ;;
+        alpine) apk del "$PKG" ;;
+        arch) sudo pacman -R --noconfirm "$PKG" ;;
+        fedora) sudo dnf remove -y "$PKG" ;;
+    esac
+}
+
+# --- ENRUTADOR DE COMANDOS MULTILINGÜE ---
 case "$ACCION" in
-    instalar|install)
+    instalar|install|i)
         if [ -z "$PAQUETE" ]; then
-            echo "❌ Especificá un paquete. Ejemplo: bacusp instalar git"
+            echo "❌ Especificá un paquete / Specify a package. Ejemplo: bacusp instalar git"
             exit 1
         fi
         instalar_paquete "$PAQUETE"
         ;;
 
-    borrar|remove)
+    borrar|remove|uninstall|rm)
         if [ -z "$PAQUETE" ]; then
             echo "❌ Especificá el paquete a desinstalar."
             exit 1
         fi
-        echo "🗑️ Desinstalando '$PAQUETE' y desvinculando dependencias..."
-        case "$ENTORNO" in
-            ios) pkg uninstall "$PAQUETE" ;;
-            debian) sudo apt-get remove -y "$PAQUETE" ;;
-            alpine) apk del "$PAQUETE" ;;
-            arch) sudo pacman -R --noconfirm "$PAQUETE" ;;
-            fedora) sudo dnf remove -y "$PAQUETE" ;;
-        esac
+        borrar_paquete "$PAQUETE"
         ;;
 
-    actualizar|update)
-        echo "🔄 Sincronizando repositorios ($ENTORNO)..."
+    actualizar|update|up)
+        echo "🔄 Sincronizando repositorios / Updating repos ($ENTORNO)..."
         case "$ENTORNO" in
             ios) pkg update ;;
             debian) sudo apt-get update ;;
@@ -128,59 +132,72 @@ case "$ACCION" in
         esac
         ;;
 
-    buscar|search)
+    buscar|search|s)
         if [ -z "$PAQUETE" ]; then
-            echo "❌ Especificá qué buscar."
+            echo "❌ Especificá qué buscar / Specify search query."
             exit 1
         fi
-        echo "🔍 Buscando '$PAQUETE'..."
+        echo "🔍 Buscando / Searching '$PAQUETE'..."
         case "$ENTORNO" in
             ios) pkg search "$PAQUETE" ;;
             debian) apt-cache search "$PAQUETE" | head -n 20 ;;
             alpine) apk search "$PAQUETE" ;;
             arch) pacman -Ss "$PAQUETE" ;;
+            fedora) dnf search "$PAQUETE" ;;
         esac
         ;;
 
-    listar|list)
-        echo "📋 Programas instalados (Entorno: $ENTORNO):"
+    listar|list|ls)
+        echo "📋 Programas instalados / Installed packages ($ENTORNO):"
         case "$ENTORNO" in
             ios) pkg list ;;
             debian) dpkg -l | grep '^ii' | awk '{print $2}' | head -n 30 ;;
             alpine) apk info ;;
             arch) pacman -Qqe ;;
+            fedora) dnf list installed | head -n 30 ;;
         esac
         ;;
 
-    clean|limpiar)
+    clean|limpiar|purge|borrar-cache)
         SCRIPT_DIR=$(dirname "$0")
         if [ -f "$SCRIPT_DIR/../modules/clean.sh" ]; then
             sh "$SCRIPT_DIR/../modules/clean.sh"
         elif [ -f "$HOME/Documents/a-Shell/bacus-pkg/modules/clean.sh" ]; then
             sh "$HOME/Documents/a-Shell/bacus-pkg/modules/clean.sh"
         else
-            echo "🧹 Limpiando temporales directamente..."
+            echo "🧹 Limpiando caché temporal directamente..."
             rm -rf ~/.cache/* 2>/dev/null
             echo "✅ Caché eliminada."
         fi
         ;;
 
-    info)
+    fetch|neofetch|info|sysinfo|sistema)
         SCRIPT_DIR=$(dirname "$0")
-        if [ -f "$SCRIPT_DIR/../modules/info.sh" ]; then
-            sh "$SCRIPT_DIR/../modules/info.sh"
+        if [ -f "$SCRIPT_DIR/../modules/fetch.sh" ]; then
+            sh "$SCRIPT_DIR/../modules/fetch.sh"
+        elif [ -f "$HOME/Documents/a-Shell/bacus-pkg/modules/fetch.sh" ]; then
+            sh "$HOME/Documents/a-Shell/bacus-pkg/modules/fetch.sh"
         else
-            echo "ℹ️ Bacusp v3.2 corriendo en $ENTORNO"
+            echo "🐢 Bacusp v3.2 corriendo en $ENTORNO"
         fi
         ;;
 
     ayuda|help|--help|-h|"")
         echo "🐢 Bacusp v3.2 - Gestor Universal (Linux & iOS)"
-        echo "Uso: bacusp <comando> [paquete]"
-        echo "Comandos: instalar, borrar, actualizar, buscar, listar, clean, info"
+        echo "Uso / Usage: bacusp <comando> [paquete]"
+        echo ""
+        echo "Comandos soportados (Soporte Bilingüe):"
+        echo "  • instalar / install <pkg>  : Instala un paquete con barra de progreso"
+        echo "  • borrar / remove <pkg>     : Desinstala un paquete"
+        echo "  • buscar / search <texto>   : Busca en los repositorios"
+        echo "  • actualizar / update       : Actualiza las listas de software"
+        echo "  • listar / list             : Muestra paquetes instalados"
+        echo "  • clean / limpiar           : Borra cachés y temporales con reporte"
+        echo "  • fetch / info              : Muestra el logo y datos de la distro/iOS"
         ;;
 
     *)
-        echo "❌ Comando desconocido: '$ACCION'"
+        echo "❌ Comando desconocido / Unknown command: '$ACCION'"
+        echo "Usa 'bacusp ayuda' para ver los comandos."
         ;;
 esac
