@@ -68,8 +68,14 @@ case "$ACCION" in
 
     listar)
         echo "📋 Paquetes instalados en chiquiOS:"
-        echo " - holabacus (v1.0.0)"
+        # Busca los ejecutables dentro del directorio de instalación
+        if [ -d "$DIR_BIN" ] && [ "$(ls -A $DIR_BIN 2>/dev/null)" ]; then
+            ls -1 "$DIR_BIN" | sed 's/^/ - /'
+        else
+            echo "   (No hay paquetes instalados todavía)"
+        fi
         ;;
+
 
     buscar)
         if [ -z "$PAQUETE" ]; then
@@ -122,8 +128,13 @@ case "$ACCION" in
 
     list)
         echo "📋 Installed packages in chiquiOS:"
-        echo " - holabacus (v1.0.0)"
+        if [ -d "$DIR_BIN" ] && [ "$(ls -A $DIR_BIN 2>/dev/null)" ]; then
+            ls -1 "$DIR_BIN" | sed 's/^/ - /'
+        else
+            echo "   (No installed packages yet)"
+        fi
         ;;
+
 
     search)
         if [ -z "$PAQUETE" ]; then
