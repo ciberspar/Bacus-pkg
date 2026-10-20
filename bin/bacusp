@@ -1,108 +1,146 @@
-#!/bin/bash
+#!/bin/sh
 # ======================================================
-#  BACUSP v2.1 - Gestor con Base Debian para chiquiOS 🐢
+#  BACUSP v3.0 - Gestor Universal (Linux & iOS/a-shell) 🐢🌍
 # ======================================================
 
 ACCION=$1
 PAQUETE=$2
 
-# --- MOTOR PRINCIPAL: DEBIAN & REPOS GLOBALES ---
+# --- DETECCIÓN DE ENTORNO ---
+detectar_gestor() {
+    if command -v pkg >/dev/null 2>&1; then
+        echo "ios"
+    elif command -v apt-get >/dev/null 2>&1; then
+        echo "debian"
+    elif command -v apk >/dev/null 2>&1; then
+        echo "alpine"
+    elif command -v pacman >/dev/null 2>&1; then
+        echo "arch"
+    elif command -v dnf >/dev/null 2>&1; then
+        echo "fedora"
+    else
+        echo "desconocido"
+    fi
+}
+
+ENTORNO=$(detectar_gestor)
+
+# --- FUNCIONES DE INSTALACIÓN ---
 instalar_paquete() {
     PKG=$1
-    echo "🔍 [Bacusp] Buscando '$PKG' en los repositorios de Debian..."
-    
-    if command -v apt-get >/dev/null 2>&1; then
-        echo "🌀 [Debian Base] Instalando '$PKG' desde APT..."
-        sudo apt-get update -y && sudo apt-get install -y "$PKG"
-    elif command -v apk >/dev/null 2>&1; then
-        echo "🐧 [Alpine Fallback] Instalando vía apk..."
-        apk add --no-cache "$PKG"
-    elif command -v pacman >/dev/null 2>&1; then
-        echo "🐧 [Arch Fallback] Instalando vía pacman..."
-        sudo pacman -S --noconfirm "$PKG"
-    elif command -v dnf >/dev/null 2>&1; then
-        echo "🐧 [Fedora Fallback] Instalando vía dnf..."
-        sudo dnf install -y "$PKG"
-    else
-        echo "❌ No se encontró gestor de paquetes soportado."
-        exit 1
-    fi
+    case "$ENTORNO" in
+        ios)
+            echo "📱 [Bacusp / a-shell] Instalando '$PKG' vía pkg..."
+            pkg install "$PKG"
+            ;;
+        debian)
+            echo "🌀 [Bacusp / Debian] Instalando '$PKG' vía APT..."
+            sudo apt-get update -y && sudo apt-get install -y "$PKG"
+            ;;
+        alpine)
+            echo "🐧 [Bacusp / Alpine] Instalando '$PKG' vía apk..."
+            apk add --no-cache "$PKG"
+            ;;
+        arch)
+            echo "🏹 [Bacusp / Arch] Instalando '$PKG' vía pacman..."
+            sudo pacman -S --noconfirm "$PKG"
+            ;;
+        fedora)
+            echo "🎩 [Bacusp / Fedora] Instalando '$PKG' vía dnf..."
+            sudo dnf install -y "$PKG"
+            ;;
+        *)
+            echo "❌ No se encontró un gestor compatible en este sistema."
+            exit 1
+            ;;
+    esac
 }
 
+# --- FUNCIONES DE BORRADO ---
 borrar_paquete() {
     PKG=$1
-    if command -v apt-get >/dev/null 2>&1; then
-        sudo apt-get remove -y "$PKG"
-    elif command -v apk >/dev/null 2>&1; then
-        apk del "$PKG"
-    elif command -v pacman >/dev/null 2>&1; then
-        sudo pacman -R --noconfirm "$PKG"
-    elif command -v dnf >/dev/null 2>&1; then
-        sudo dnf remove -y "$PKG"
-    fi
+    case "$ENTORNO" in
+        ios) pkg uninstall "$PKG" ;;
+        debian) sudo apt-get remove -y "$PKG" ;;
+        alpine) apk del "$PKG" ;;
+        arch) sudo pacman -R --noconfirm "$PKG" ;;
+        fedora) sudo dnf remove -y "$PKG" ;;
+    esac
 }
 
+# --- LÓGICA DE COMANDOS ---
 case "$ACCION" in
     instalar|install)
         if [ -z "$PAQUETE" ]; then
-            echo "❌ Especificá un paquete. Ejemplo: bacusp instalar firefox-esr"
+            echo "❌ Especificá un paquete. Ejemplo: bacusp instalar curl"
             exit 1
         fi
         instalar_paquete "$PAQUETE"
-        echo "✅ ¡$PAQUETE instalado con éxito en chiquiOS!"
+        echo "✅ ¡$PAQUETE procesado por Bacusp!"
         ;;
 
     borrar|remove)
         if [ -z "$PAQUETE" ]; then
-            echo "❌ Especificá el paquete a borrar."
+            echo "❌ Especificá el paquete a desinstalar."
             exit 1
         fi
         echo "🗑️ Desinstalando '$PAQUETE'..."
         borrar_paquete "$PAQUETE"
-        echo "✅ Paquete desinstalado."
+        echo "✅ Paquete removido."
         ;;
 
     actualizar|update)
-        echo "🔄 Actualizando catálogo oficial de Debian..."
-        if command -v apt-get >/dev/null 2>&1; then
-            sudo apt-get update
-        elif command -v apk >/dev/null 2>&1; then
-            apk update
-        fi
-        echo "✅ Repositorios sincronizados."
+        echo "🔄 Sincronizando repositorios para el entorno: $ENTORNO..."
+        case "$ENTORNO" in
+            ios) pkg update ;;
+            debian) sudo apt-get update ;;
+            alpine) apk update ;;
+            arch) sudo pacman -Sy ;;
+            fedora) sudo dnf check-update ;;
+        esac
+        echo "✅ Repositorios actualizados."
         ;;
 
     buscar|search)
         if [ -z "$PAQUETE" ]; then
-            echo "❌ Especificá qué buscar. Ejemplo: bacusp buscar nmap"
+            echo "❌ Especificá qué buscar."
             exit 1
         fi
-        echo "🔍 Buscando '$PAQUETE' en los repositorios de Debian..."
-        if command -v apt-cache >/dev/null 2>&1; then
-            apt-cache search "$PAQUETE" | head -n 20
-        fi
+        echo "🔍 Buscando '$PAQUETE'..."
+        case "$ENTORNO" in
+            ios) pkg search "$PAQUETE" ;;
+            debian) apt-cache search "$PAQUETE" | head -n 20 ;;
+            alpine) apk search "$PAQUETE" ;;
+            arch) pacman -Ss "$PAQUETE" ;;
+            *) echo "Búsqueda no soportada en este entorno." ;;
+        esac
         ;;
 
     listar|list)
-        echo "📋 Programas Debian instalados:"
-        if command -v dpkg >/dev/null 2>&1; then
-            dpkg -l | grep '^ii' | awk '{print $2}' | head -n 35
-        fi
+        echo "📋 Programas instalados (Entorno: $ENTORNO):"
+        case "$ENTORNO" in
+            ios) pkg list ;;
+            debian) dpkg -l | grep '^ii' | awk '{print $2}' | head -n 30 ;;
+            alpine) apk info ;;
+            arch) pacman -Qqe ;;
+            *) echo "Listado no disponible." ;;
+        esac
         ;;
 
     ayuda|help|--help|-h|"")
-        echo "🐢 Bacusp v2.1 (Debian Base Engine - chiquiOS)"
+        echo "🐢 Bacusp v3.0 - Gestor Universal (Linux & iOS)"
         echo "Uso: bacusp <comando> [paquete]"
         echo ""
         echo "Comandos:"
-        echo "  actualizar / update        Actualiza la lista de repositorios Debian"
-        echo "  buscar     / search <kw>   Buca programas en todo el catálogo Debian"
-        echo "  instalar   / install <pkg> Instala un paquete .deb oficial"
-        echo "  borrar     / remove  <pkg> Desinstala una app"
-        echo "  listar     / list          Lista las apps instaladas"
+        echo "  actualizar / update        Sincroniza los repos del sistema actual"
+        echo "  buscar     / search <kw>   Busca programas"
+        echo "  instalar   / install <pkg> Instala una aplicación"
+        echo "  borrar     / remove  <pkg> Desinstala una aplicación"
+        echo "  listar     / list          Muestra las apps instaladas"
         ;;
 
     *)
         echo "❌ Comando desconocido: '$ACCION'"
+        echo "Usá 'bacusp ayuda' para ver las opciones."
         ;;
 esac
