@@ -1,174 +1,131 @@
 #!/bin/bash
 # ======================================================
-#  BACUSP - Gestor de Paquetes Multilingüe para chiquiOS 🐢
+#  BACUSP v1.2 - Gestor Multidistro Dinámico para chiquiOS 🐢
 # ======================================================
 
 ACCION=$1
 PAQUETE=$2
 
-# Definición de URLs y rutas del sistema
-REGISTRO_GHCR="ghcr.io/guafguaf/bacus-pkg"
-DIR_BIN="/usr/local/bin"
+REPO_USER="ciberspar"
+REPO_NAME="bacus-pkg"
+URL_CATALOGO="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/main/paquetes.json"
+CACHE_DIR="/var/cache/bacusp"
+CATALOGO_LOCAL="$CACHE_DIR/paquetes.json"
 
-mostrar_ayuda_es() {
-    echo "🐢 Bacusp v1.0.0 (chiquiOS) - Gestor de Paquetes"
-    echo "Uso: bacusp <comando> [paquete]"
-    echo ""
-    echo "Comandos disponibles:"
-    echo "  instalar    Instala un paquete desde GitHub Container Registry"
-    echo "  borrar      Elimina un paquete del sistema"
-    echo "  actualizar  Actualiza la lista de paquetes disponibles"
-    echo "  listar      Muestra los paquetes instalados en el sistema"
-    echo "  buscar      Busca un paquete en el repositorio"
-    echo "  detalles    Muestra detalles e información de un paquete"
-    echo "  ayuda       Muestra este menú de ayuda"
+mkdir -p "$CACHE_DIR" 2>/dev/null
+
+# --- DETECTOR DE DISTRIBUCIÓN DE LINUX ---
+instalar_segun_distro() {
+    PKG=$1
+    if command -v apk >/dev/null 2>&1; then
+        echo "🐧 [chiquiOS/Alpine] Instalando $PKG vía apk..."
+        apk add --no-cache "$PKG"
+    elif command -v apt-get >/dev/null 2>&1; then
+        echo "🐧 [Debian/Ubuntu] Instalando $PKG vía apt..."
+        sudo apt-get update && sudo apt-get install -y "$PKG"
+    elif command -v pacman >/dev/null 2>&1; then
+        echo "🐧 [Arch Linux] Instalando $PKG vía pacman..."
+        sudo pacman -S --noconfirm "$PKG"
+    elif command -v dnf >/dev/null 2>&1; then
+        echo "🐧 [Fedora/RHEL] Instalando $PKG vía dnf..."
+        sudo dnf install -y "$PKG"
+    else
+        echo "❌ No se encontró un gestor de paquetes soportado en este sistema."
+        exit 1
+    fi
 }
 
-mostrar_ayuda_en() {
-    echo "🐢 Bacusp v1.0.0 (chiquiOS) - Package Manager"
-    echo "Usage: bacusp <command> [package]"
-    echo ""
-    echo "Available commands:"
-    echo "  install     Install a package from GitHub Container Registry"
-    echo "  remove      Remove a package from the system"
-    echo "  update      Update the available package list"
-    echo "  list        Show installed packages on the system"
-    echo "  search      Search for a package in the repository"
-    echo "  info        Show package details and information"
-    echo "  help        Show this help menu"
+borrar_segun_distro() {
+    PKG=$1
+    if command -v apk >/dev/null 2>&1; then
+        apk del "$PKG"
+    elif command -v apt-get >/dev/null 2>&1; then
+        sudo apt-get remove -y "$PKG"
+    elif command -v pacman >/dev/null 2>&1; then
+        sudo pacman -R --noconfirm "$PKG"
+    elif command -v dnf >/dev/null 2>&1; then
+        sudo dnf remove -y "$PKG"
+    fi
 }
 
+actualizar_catalogo() {
+    echo "🔄 [Bacusp] Sincronizando catálogo remoto de $REPO_NAME..."
+    if curl -sSL "$URL_CATALOGO" -o "$CATALOGO_LOCAL"; then
+        echo "✅ Catálogo actualizado correctamente."
+    else
+        echo "❌ Error al conectar con GitHub para bajar el catálogo."
+        exit 1
+    fi
+}
+
+# --- LÓGICA DE COMANDOS BILINGÜES ---
 case "$ACCION" in
-    # --- COMANDOS EN ESPAÑOL ---
-    instalar)
+    actualizar|update)
+        actualizar_catalogo
+        ;;
+
+    buscar|search)
+        if [ ! -f "$CATALOGO_LOCAL" ]; then
+            actualizar_catalogo
+        fi
+        echo "🔍 Buscando aplicaciones disponibles en bacus-pkg:"
+        grep -E '"(nombre|descripcion)"' "$CATALOGO_LOCAL" | sed 's/^[ \t]*//'
+        ;;
+
+    instalar|install)
         if [ -z "$PAQUETE" ]; then
-            echo "❌ Error: Tenés que especificar el paquete a instalar."
-            echo "Ejemplo: bacusp instalar holabacus"
+            echo "❌ Decime qué paquete querés instalar. Ejemplo: bacusp instalar nmap"
             exit 1
         fi
-        echo "🔍 Buscando '$PAQUETE' en $REGISTRO_GHCR..."
-        echo "📦 Descargando contenedor OCI desde GHCR..."
-        echo "⚙️ Instalando $PAQUETE en $DIR_BIN/$PAQUETE..."
-        echo "✅ ¡$PAQUETE se instaló correctamente!"
-        ;;
 
-    borrar|eliminar)
-        if [ -z "$PAQUETE" ]; then
-            echo "❌ Error: Tenés que especificar el paquete a borrar."
-            exit 1
+        if [ ! -f "$CATALOGO_LOCAL" ]; then
+            actualizar_catalogo
         fi
-        echo "🗑️ Desinstalando '$PAQUETE'..."
-        echo "✅ Paquete '$PAQUETE' removido con éxito."
-        ;;
 
-    actualizar)
-        echo "🔄 Actualizando el índice de paquetes de bacus-pkg..."
-        echo "✅ Lista de paquetes actualizada."
-        ;;
-
-    listar)
-        echo "📋 Paquetes instalados en chiquiOS:"
-        # Busca los ejecutables dentro del directorio de instalación
-        if [ -d "$DIR_BIN" ] && [ "$(ls -A $DIR_BIN 2>/dev/null)" ]; then
-            ls -1 "$DIR_BIN" | sed 's/^/ - /'
+        if grep -q "\"$PAQUETE\":" "$CATALOGO_LOCAL"; then
+            echo "📦 Paquete '$PAQUETE' verificado en catálogo remoto."
+            instalar_segun_distro "$PAQUETE"
+            echo "✅ ¡$PAQUETE se instaló con éxito!"
         else
-            echo "   (No hay paquetes instalados todavía)"
-        fi
-        ;;
-
-
-    buscar)
-        if [ -z "$PAQUETE" ]; then
-            echo "❌ Decime qué paquete querés buscar."
+            echo "❌ El paquete '$PAQUETE' no figura en el catálogo remoto."
+            echo "💡 Ejecutá 'bacusp buscar' o actualizá tu paquetes.json en GitHub."
             exit 1
         fi
-        echo "🔍 Buscando coincidencias para '$PAQUETE' en bacus-pkg..."
         ;;
 
-    detalles)
+    borrar|remove)
         if [ -z "$PAQUETE" ]; then
-            echo "❌ Especificá un paquete para ver su información."
+            echo "❌ Decime qué paquete querés desinstalar."
             exit 1
         fi
-        echo "ℹ️ Detalles de $PAQUETE:"
-        echo "   Origen: $REGISTRO_GHCR/$PAQUETE:latest"
-        echo "   Arquitectura: Contenedor universal OCI"
+        echo "🗑️ Eliminando '$PAQUETE' del sistema..."
+        borrar_segun_distro "$PAQUETE"
+        echo "✅ Desinstalación completada."
         ;;
 
-    ayuda)
-        mostrar_ayuda_es
-        ;;
-
-    # --- COMANDOS EN INGLÉS ---
-    install)
-        if [ -z "$PAQUETE" ]; then
-            echo "❌ Error: You must specify a package to install."
-            echo "Example: bacusp install holabacus"
-            exit 1
-        fi
-        echo "🔍 Searching for '$PAQUETE' in $REGISTRO_GHCR..."
-        echo "📦 Downloading OCI container from GHCR..."
-        echo "⚙️ Installing $PAQUETE into $DIR_BIN/$PAQUETE..."
-        echo "✅ $PAQUETE was installed successfully!"
-        ;;
-
-    remove|purge)
-        if [ -z "$PAQUETE" ]; then
-            echo "❌ Error: You must specify a package to remove."
-            exit 1
-        fi
-        echo "🗑️ Uninstalling '$PAQUETE'..."
-        echo "✅ Package '$PAQUETE' removed successfully."
-        ;;
-
-    update)
-        echo "🔄 Updating bacus-pkg package index..."
-        echo "✅ Package list updated."
-        ;;
-
-    list)
-        echo "📋 Installed packages in chiquiOS:"
-        if [ -d "$DIR_BIN" ] && [ "$(ls -A $DIR_BIN 2>/dev/null)" ]; then
-            ls -1 "$DIR_BIN" | sed 's/^/ - /'
-        else
-            echo "   (No installed packages yet)"
+    listar|list)
+        echo "📋 Aplicaciones instaladas en el sistema:"
+        if command -v apk >/dev/null 2>&1; then
+            apk info
+        elif command -v apt-get >/dev/null 2>&1; then
+            dpkg -l | grep '^ii' | awk '{print $2}' | head -n 30
         fi
         ;;
 
-
-    search)
-        if [ -z "$PAQUETE" ]; then
-            echo "❌ Please specify a package to search for."
-            exit 1
-        fi
-        echo "🔍 Searching matches for '$PAQUETE' in bacus-pkg..."
-        ;;
-
-    info|show)
-        if [ -z "$PAQUETE" ]; then
-            echo "❌ Specify a package to view details."
-            exit 1
-        fi
-        echo "ℹ️ Details for $PAQUETE:"
-        echo "   Source: $REGISTRO_GHCR/$PAQUETE:latest"
-        echo "   Architecture: Universal OCI Container"
-        ;;
-
-    help)
-        mostrar_ayuda_en
-        ;;
-
-    # --- SINOPSIS GENERAL / DEFAULT ---
-    --help|-h|"")
-        echo "🐢 Bacusp v1.0.0 (chiquiOS)"
-        echo "Usá / Use:"
-        echo "  bacusp ayuda  (para español)"
-        echo "  bacusp help   (for English)"
+    ayuda|help|--help|-h|"")
+        echo "🐢 Bacusp v1.2 Multi-Distro (chiquiOS Package Manager)"
+        echo "Uso: bacusp <comando> [paquete]"
+        echo ""
+        echo "Comandos (ES/EN):"
+        echo "  actualizar / update        Baja la versión más reciente del catálogo"
+        echo "  buscar     / search        Muestra las apps del catálogo remoto"
+        echo "  instalar   / install <pkg> Instala una app real detectando tu distro"
+        echo "  borrar     / remove  <pkg> Borra la app del sistema"
+        echo "  listar     / list          Lista los programas instalados"
         ;;
 
     *)
-        echo "❌ Comando no reconocido / Unknown command: '$ACCION'"
-        echo "Ejecutá 'bacusp ayuda' o 'bacusp help'."
-        exit 1
+        echo "❌ Comando desconocido: '$ACCION'"
+        echo "Usá 'bacusp ayuda' o 'bacusp help'."
         ;;
 esac
