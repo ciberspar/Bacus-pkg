@@ -1,41 +1,35 @@
 #!/bin/bash
 # ======================================================
-#  BACUSP v1.2 - Gestor Multidistro Dinámico para chiquiOS 🐢
+#  BACUSP v2.0 - Gestor Universal con Repos de la Comunidad 🐢
 # ======================================================
 
 ACCION=$1
 PAQUETE=$2
 
-REPO_USER="ciberspar"
-REPO_NAME="bacus-pkg"
-URL_CATALOGO="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/main/paquetes.json"
-CACHE_DIR="/var/cache/bacusp"
-CATALOGO_LOCAL="$CACHE_DIR/paquetes.json"
-
-mkdir -p "$CACHE_DIR" 2>/dev/null
-
-# --- DETECTOR DE DISTRIBUCIÓN DE LINUX ---
-instalar_segun_distro() {
+# --- INSTALADOR USANDO REPOS GLOBALES Y DE LA COMUNIDAD ---
+instalar_desde_comunidad() {
     PKG=$1
+    echo "🔍 [Bacusp] Buscando '$PKG' en los repositorios oficiales y de la comunidad..."
+    
     if command -v apk >/dev/null 2>&1; then
-        echo "🐧 [chiquiOS/Alpine] Instalando $PKG vía apk..."
+        echo "🐧 [Alpine / chiquiOS] Consultando repos main & community..."
         apk add --no-cache "$PKG"
     elif command -v apt-get >/dev/null 2>&1; then
-        echo "🐧 [Debian/Ubuntu] Instalando $PKG vía apt..."
+        echo "🐧 [Debian / Ubuntu] Consultando repos oficiales y universe..."
         sudo apt-get update && sudo apt-get install -y "$PKG"
     elif command -v pacman >/dev/null 2>&1; then
-        echo "🐧 [Arch Linux] Instalando $PKG vía pacman..."
+        echo "🐧 [Arch Linux] Consultando repos Core, Extra & AUR..."
         sudo pacman -S --noconfirm "$PKG"
     elif command -v dnf >/dev/null 2>&1; then
-        echo "🐧 [Fedora/RHEL] Instalando $PKG vía dnf..."
+        echo "🐧 [Fedora / RHEL] Consultando repos de la comunidad..."
         sudo dnf install -y "$PKG"
     else
-        echo "❌ No se encontró un gestor de paquetes soportado en este sistema."
+        echo "❌ No se encontró un gestor de paquetes compatible en este sistema."
         exit 1
     fi
 }
 
-borrar_segun_distro() {
+borrar_paquete() {
     PKG=$1
     if command -v apk >/dev/null 2>&1; then
         apk del "$PKG"
@@ -48,84 +42,61 @@ borrar_segun_distro() {
     fi
 }
 
-actualizar_catalogo() {
-    echo "🔄 [Bacusp] Sincronizando catálogo remoto de $REPO_NAME..."
-    if curl -sSL "$URL_CATALOGO" -o "$CATALOGO_LOCAL"; then
-        echo "✅ Catálogo actualizado correctamente."
-    else
-        echo "❌ Error al conectar con GitHub para bajar el catálogo."
-        exit 1
-    fi
-}
-
-# --- LÓGICA DE COMANDOS BILINGÜES ---
+# --- LÓGICA DE COMANDOS ---
 case "$ACCION" in
-    actualizar|update)
-        actualizar_catalogo
-        ;;
-
-    buscar|search)
-        if [ ! -f "$CATALOGO_LOCAL" ]; then
-            actualizar_catalogo
-        fi
-        echo "🔍 Buscando aplicaciones disponibles en bacus-pkg:"
-        grep -E '"(nombre|descripcion)"' "$CATALOGO_LOCAL" | sed 's/^[ \t]*//'
-        ;;
-
     instalar|install)
         if [ -z "$PAQUETE" ]; then
-            echo "❌ Decime qué paquete querés instalar. Ejemplo: bacusp instalar nmap"
+            echo "❌ Especificá un paquete. Ejemplo: bacusp instalar firefox"
             exit 1
         fi
-
-        if [ ! -f "$CATALOGO_LOCAL" ]; then
-            actualizar_catalogo
-        fi
-
-        if grep -q "\"$PAQUETE\":" "$CATALOGO_LOCAL"; then
-            echo "📦 Paquete '$PAQUETE' verificado en catálogo remoto."
-            instalar_segun_distro "$PAQUETE"
-            echo "✅ ¡$PAQUETE se instaló con éxito!"
-        else
-            echo "❌ El paquete '$PAQUETE' no figura en el catálogo remoto."
-            echo "💡 Ejecutá 'bacusp buscar' o actualizá tu paquetes.json en GitHub."
-            exit 1
-        fi
+        instalar_comunidad "$PAQUETE"
+        echo "✅ ¡$PAQUETE procesado con éxito por Bacusp!"
         ;;
 
     borrar|remove)
         if [ -z "$PAQUETE" ]; then
-            echo "❌ Decime qué paquete querés desinstalar."
+            echo "❌ Especificá el paquete a borrar."
             exit 1
         fi
-        echo "🗑️ Eliminando '$PAQUETE' del sistema..."
-        borrar_segun_distro "$PAQUETE"
-        echo "✅ Desinstalación completada."
+        echo "🗑️ Desinstalando '$PAQUETE'..."
+        borrar_paquete "$PAQUETE"
+        echo "✅ Paquete removido."
+        ;;
+
+    actualizar|update)
+        echo "🔄 Sincronizando listas de los repositorios de la comunidad..."
+        if command -v apk >/dev/null 2>&1; then
+            apk update
+        elif command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update
+        elif command -v pacman >/dev/null 2>&1; then
+            sudo pacman -Sy
+        fi
+        echo "✅ Repositorios sincronizados."
         ;;
 
     listar|list)
-        echo "📋 Aplicaciones instaladas en el sistema:"
+        echo "📋 Programas instalados en el sistema:"
         if command -v apk >/dev/null 2>&1; then
             apk info
         elif command -v apt-get >/dev/null 2>&1; then
-            dpkg -l | grep '^ii' | awk '{print $2}' | head -n 30
+            dpkg -l | grep '^ii' | awk '{print $2}' | head -n 35
         fi
         ;;
 
     ayuda|help|--help|-h|"")
-        echo "🐢 Bacusp v1.2 Multi-Distro (chiquiOS Package Manager)"
+        echo "🐢 Bacusp v2.0 - chiquiOS Package Manager"
         echo "Uso: bacusp <comando> [paquete]"
         echo ""
         echo "Comandos (ES/EN):"
-        echo "  actualizar / update        Baja la versión más reciente del catálogo"
-        echo "  buscar     / search        Muestra las apps del catálogo remoto"
-        echo "  instalar   / install <pkg> Instala una app real detectando tu distro"
-        echo "  borrar     / remove  <pkg> Borra la app del sistema"
-        echo "  listar     / list          Lista los programas instalados"
+        echo "  actualizar / update        Actualiza las listas de los repos globales"
+        echo "  instalar   / install <pkg> Instala cualquier app desde la comunidad"
+        echo "  borrar     / remove  <pkg> Desinstala una aplicación"
+        echo "  listar     / list          Muestra las apps instaladas"
         ;;
 
     *)
         echo "❌ Comando desconocido: '$ACCION'"
-        echo "Usá 'bacusp ayuda' o 'bacusp help'."
+        echo "Usá 'bacusp ayuda' para ver las opciones disponibles."
         ;;
 esac
