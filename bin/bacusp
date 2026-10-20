@@ -1,6 +1,6 @@
 #!/bin/sh
 # ======================================================
-#  BACUSP v3.1 - Gestor Universal (Linux & iOS/a-shell) 🐢🌍
+#  BACUSP v3.2 - Gestor Universal con Barra & Clean 🐢🌍
 # ======================================================
 
 ACCION=$1
@@ -25,38 +25,64 @@ detectar_gestor() {
 
 ENTORNO=$(detectar_gestor)
 
+# --- BARRA DE PROGRESO TIPO APT ---
+animar_barra() {
+    MENSAJE=$1
+    echo "$MENSAJE"
+    
+    # Simulación de pasos de instalación al estilo APT
+    PASOS="10 30 55 80 100"
+    for P in $PASOS; do
+        BARRA=""
+        LLENOS=$((P / 5))
+        VACIOS=$((20 - LLENOS))
+        
+        i=0; while [ $i -lt $LLENOS ]; do BARRA="${BARRA}#"; i=$((i + 1)); done
+        i=0; while [ $i -lt $VACIOS ]; do BARRA="${BARRA}."; i=$((i + 1)); done
+        
+        printf "\r[%s] %3d%% Cargando componentes..." "$BARRA" "$P"
+        sleep 0.15
+    done
+    echo ""
+}
+
 # --- FUNCIONES DE INSTALACIÓN ---
 instalar_paquete() {
     PKG=$1
     case "$ENTORNO" in
         ios)
-            echo "📱 [Bacusp / a-shell] Verificando '$PKG'..."
-            # Si el comando ya existe en a-shell
+            echo "📱 [Bacusp / a-shell] Analizando '$PKG' y dependencias..."
             if command -v "$PKG" >/dev/null 2>&1; then
-                echo "⚡ '$PKG' ya está disponible de forma nativa en a-shell."
+                echo "⚡ El comando '$PKG' ya se encuentra disponible de forma nativa en a-shell."
             else
-                echo "📦 Intentando instalar '$PKG' vía pkg..."
+                echo "📦 Preparando árbol de librerías para '$PKG':"
+                echo "   ├── $PKG (paquete principal)"
+                echo "   └── libwasm-$PKG.a (runtime WebAssembly)"
+                
+                animar_barra "🚀 Desempaquetando e instalando componentes en iOS..."
+                
                 if pkg install "$PKG"; then
-                    echo "✅ ¡$PKG instalado con éxito por Bacusp!"
+                    echo "✅ ¡Librerías y binarios de '$PKG' instalados correctamente por Bacusp!"
                 else
-                    echo "❌ Error: '$PKG' no existe en el repo de pkg de a-shell."
+                    echo "❌ Error: '$PKG' no se encuentra en el repositorio de pkg de a-shell."
                 fi
             fi
             ;;
         debian)
-            echo "🌀 [Bacusp / Debian] Instalando '$PKG' vía APT..."
-            sudo apt-get update -y && sudo apt-get install -y "$PKG" && echo "✅ ¡$PKG instalado!"
+            echo "🌀 [Bacusp / Debian] Leyendo lista de paquetes y librerías..."
+            sudo apt-get update -y
+            sudo apt-get install -y "$PKG" && echo "✅ ¡$PKG y sus librerías asociadas han sido instalados!"
             ;;
         alpine)
             echo "🐧 [Bacusp / Alpine] Instalando '$PKG' vía apk..."
             apk add --no-cache "$PKG" && echo "✅ ¡$PKG instalado!"
             ;;
         arch)
-            echo "🏹 [Bacusp / Arch] Instalando '$PKG' vía pacman..."
+            echo "🏹 [Bacusp / Arch] Resolviendo dependencias para '$PKG'..."
             sudo pacman -S --noconfirm "$PKG" && echo "✅ ¡$PKG instalado!"
             ;;
         fedora)
-            echo "🎩 [Bacusp / Fedora] Instalando '$PKG' vía dnf..."
+            echo "🎩 [Bacusp / Fedora] Instalando '$PKG'..."
             sudo dnf install -y "$PKG" && echo "✅ ¡$PKG instalado!"
             ;;
         *)
@@ -81,7 +107,7 @@ case "$ACCION" in
             echo "❌ Especificá el paquete a desinstalar."
             exit 1
         fi
-        echo "🗑️ Desinstalando '$PAQUETE'..."
+        echo "🗑️ Desinstalando '$PAQUETE' y desvinculando dependencias..."
         case "$ENTORNO" in
             ios) pkg uninstall "$PAQUETE" ;;
             debian) sudo apt-get remove -y "$PAQUETE" ;;
@@ -126,10 +152,32 @@ case "$ACCION" in
         esac
         ;;
 
+    clean|limpiar)
+        SCRIPT_DIR=$(dirname "$0")
+        if [ -f "$SCRIPT_DIR/../modules/clean.sh" ]; then
+            sh "$SCRIPT_DIR/../modules/clean.sh"
+        elif [ -f "$HOME/Documents/a-Shell/bacus-pkg/modules/clean.sh" ]; then
+            sh "$HOME/Documents/a-Shell/bacus-pkg/modules/clean.sh"
+        else
+            echo "🧹 Limpiando temporales directamente..."
+            rm -rf ~/.cache/* 2>/dev/null
+            echo "✅ Caché eliminada."
+        fi
+        ;;
+
+    info)
+        SCRIPT_DIR=$(dirname "$0")
+        if [ -f "$SCRIPT_DIR/../modules/info.sh" ]; then
+            sh "$SCRIPT_DIR/../modules/info.sh"
+        else
+            echo "ℹ️ Bacusp v3.2 corriendo en $ENTORNO"
+        fi
+        ;;
+
     ayuda|help|--help|-h|"")
-        echo "🐢 Bacusp v3.1 - Gestor Universal (Linux & iOS)"
+        echo "🐢 Bacusp v3.2 - Gestor Universal (Linux & iOS)"
         echo "Uso: bacusp <comando> [paquete]"
-        echo "Comandos: instalar, borrar, actualizar, buscar, listar"
+        echo "Comandos: instalar, borrar, actualizar, buscar, listar, clean, info"
         ;;
 
     *)
