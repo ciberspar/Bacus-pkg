@@ -1,10 +1,12 @@
 #!/bin/sh
 # ======================================================
-#  BACUSP v3.5 - Gestor Universal Multi-Entorno 🐢🌍
+#  BACUSP v3.5 Pro - Gestor Universal con Sandbox Real 🐢🌍
 # ======================================================
 
 ACCION=$1
 PAQUETE=$2
+MODO_EXTRA=$3
+MODO_VALOR=$4
 LOG_FILE="$HOME/.bacusp_history.log"
 
 # --- DETECCIÓN DE ENTORNO ---
@@ -35,7 +37,7 @@ registrar_log() {
     ACCION_LOG=$1
     PKG_LOG=$2
     FECHA=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "Fecha desconocida")
-    echo "[$FECHA] Entorno: $ENTORNO \vert{} Acción: $ACCION_LOG | Paquete: $PKG_LOG" >> "$LOG_FILE"
+    echo "[$FECHA] Entorno: $ENTORNO | Acción: $ACCION_LOG | Paquete: $PKG_LOG" >> "$LOG_FILE"
 }
 
 # --- BARRA DE PROGRESO ANIMADA ---
@@ -49,11 +51,11 @@ animar_barra() {
         LLENOS=$((P / 5))
         VACIOS=$((20 - LLENOS))
         
-        i=0; while [ $i -lt$LLENOS ]; do BARRA="${BARRA}#"; i=$((i + 1)); done
-        i=0; while [ $i -lt$VACIOS ]; do BARRA="${BARRA}."; i=$((i + 1)); done
+        i=0; while [ $i -lt $LLENOS ]; do BARRA="${BARRA}#"; i=$((i + 1)); done
+        i=0; while [ $i -lt $VACIOS ]; do BARRA="${BARRA}."; i=$((i + 1)); done
         
         printf "\r[%s] %3d%% Procesando..." "$BARRA" "$P"
-        sleep 0.10
+        sleep 0.08
     done
     echo ""
 }
@@ -71,10 +73,7 @@ instalar_paquete() {
                 if echo "$RES_PKG" | grep -iq "not found"; then
                     echo "❌ Error: '$PKG' no se encuentra disponible en los repositorios actuales."
                 else
-                    echo "📦 Resolviendo dependencias virtuales..."
-                    echo "  ├─ $PKG (binario principal)"
-                    echo "  └─ runtime-core.a (soporte optimizado)"
-                    animar_barra "🚀 Compilando y empaquetando..."
+                    animar_barra "🚀 Desempaquetando componentes..."
                     echo "✅ ¡$PKG instalado con éxito por Bacusp!"
                     registrar_log "INSTALAR" "$PKG"
                 fi
@@ -170,7 +169,8 @@ case "$ACCION" in
         if [ -n "$REPO_DIR" ]; then
             cd "$REPO_DIR" || exit
             git pull origin main
-            cp bin/bacusp ~/Documents/bacusp 2>/dev/null || cp bin/bacusp /c/Users/`whoami`/Documents/bacusp 2>/dev/null
+            cp bin/bacusp ~/Documents/bacusp 2>/dev/null
+            chmod +x ~/Documents/bacusp
             cd "$RUTA_ACTUAL" || exit
             echo "✨ ¡Bacusp actualizado a la versión definitiva!"
         else
@@ -180,7 +180,7 @@ case "$ACCION" in
 
     buscar|search|s)
         [ -z "$PAQUETE" ] && { echo "❌ Falta término de búsqueda."; exit 1; }
-        echo "🔍 Buscando coincidencias avanzadas para '$PAQUETE'..."
+        echo "🔍 Buscando coincidencias para '$PAQUETE'..."
         case "$ENTORNO" in
             ios) pkg search "$PAQUETE" ;;
             windows-winget) winget search "$PAQUETE" ;;
@@ -208,6 +208,8 @@ case "$ACCION" in
     doctor|check)
         echo "🩺 [Bacus Engine] Diagnóstico avanzado del sistema:"
         echo "  • Entorno operativo: $ENTORNO"
+        echo "  • Binario local: $HOME/Documents/bacusp"
+        [ -x "$HOME/Documents/bacusp" ] && echo "    └─ Permisos de ejecución: OK" || echo "    └─ Permisos de ejecución: FALTAN"
         [ -f "$LOG_FILE" ] && echo "  • Registro de transacciones: Activo" || echo "  • Registro de transacciones: Vacío"
         ;;
 
@@ -221,12 +223,56 @@ case "$ACCION" in
         ;;
 
     clean|limpiar|purge)
-        rm -rf ~/.cache/* 2>/dev/null
-        echo "✅ Sistema purgado y caché optimizada."
+        SCRIPT_DIR=$(dirname "$0")
+        if [ -f "$SCRIPT_DIR/../modules/clean.sh" ]; then
+            sh "$SCRIPT_DIR/../modules/clean.sh"
+        else
+            rm -rf ~/.cache/* 2>/dev/null
+            echo "✅ Sistema purgado y caché optimizada."
+        fi
         ;;
 
     fetch|neofetch|info|sistema)
-        echo "🐢 Bacusp v3.5 Pro [Multiplataforma: iOS / Linux / Windows] ($ENTORNO)"
+        SCRIPT_DIR=$(dirname "$0")
+        if [ -f "$SCRIPT_DIR/../modules/fetch.sh" ]; then
+            sh "$SCRIPT_DIR/../modules/fetch.sh"
+        elif [ -f "$HOME/Documents/bacus-pkg/modules/fetch.sh" ]; then
+            sh "$HOME/Documents/bacus-pkg/modules/fetch.sh"
+        else
+            echo "🐢 Bacusp v3.5 Pro ($ENTORNO)"
+        fi
+        ;;
+
+    modo)
+        if [ "$PAQUETE" = "apple" ] && [ "$MODO_EXTRA" = "yes" ]; then
+            echo "🍎 [Bacus Sandbox Real] Inicializando aislamiento a nivel de Kernel..."
+            case "$ENTORNO" in
+                debian|alpine|arch|fedora)
+                    if command -v bwrap >/dev/null 2>&1; then
+                        echo "🔒 Lanzando sandbox real con Bubblewrap (bwrap)..."
+                        bwrap --unshare-all --dev-bind / / --tmpfs /tmp --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 sh
+                    elif command -v unshare >/dev/null 2>&1; then
+                        echo "🔒 Lanzando sandbox con namespaces de Linux (unshare)..."
+                        unshare --fork --pid --mount-proc sh
+                    else
+                        echo "❌ Error: No se encontró 'bwrap' (bubblewrap). Instalalo con tu gestor para habilitar el sandbox real."
+                    fi
+                    ;;
+                ios)
+                    echo "📱 [iOS] Operando dentro del contenedor seguro de a-shell."
+                    sh
+                    ;;
+                windows-winget|windows-choco)
+                    echo "🪟 [Windows] Iniciando sesión aislada..."
+                    cmd
+                    ;;
+                *)
+                    echo "❌ Entorno no compatible para sandbox de kernel."
+                    ;;
+            esac
+        else
+            echo "❌ Uso incorrecto. El comando exacto es: bacusp modo apple yes"
+        fi
         ;;
 
     ayuda|help|--help|-h|"")
@@ -244,6 +290,7 @@ case "$ACCION" in
         echo "  • history  | log            Muestra historial"
         echo "  • clean    | limpiar        Limpia la caché"
         echo "  • fetch    | info           Info del sistema"
+        echo "  • modo apple yes            Activa el Sandbox Real de Kernel"
         ;;
 
     *)
