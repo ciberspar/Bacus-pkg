@@ -1,0 +1,79 @@
+#!/bin/sh
+# ======================================================
+#  Módulo Fetch Universal - chiquiOS & Linux 🐢🐧📱
+# ======================================================
+
+# Definición de colores ANSI
+VERDE='\033[1;32m'
+AZUL='\033[1;34m'
+CYAN='\033[1;36m'
+ROJO='\033[1;31m'
+MAGENTA='\033[1;35m'
+AMARILLO='\033[1;33m'
+RESET='\033[0m'
+
+# --- DETECCIÓN DE DISTRO / OS ---
+if command -v pkg >/dev/null 2>&1; then
+    DISTRO="ios"
+    NOM_DISTRO="iOS (a-shell / chiquiOS)"
+elif [ -f /etc/os-release ]; then
+    . /etc/os-release
+    DISTRO=$ID
+    NOM_DISTRO=$NAME
+else
+    DISTRO="linux"
+    NOM_DISTRO="$(uname -s) Generic"
+fi
+
+USUARIO=$(whoami 2>/dev/null || echo "gero")
+SHELL_ACTUAL=$(basename "$SHELL" 2>/dev/null || echo "sh")
+ARQ=$(uname -m)
+RUTA_ACTUAL=$(pwd)
+
+# --- IMPRESIÓN SEGÚN SISTEMA ---
+echo ""
+case "$DISTRO" in
+    ios)
+        echo "${VERDE}   __                         ${RESET} 👤 ${CYAN}Usuario / User:${RESET} $USUARIO"
+        echo "${VERDE}  /  \\__                     ${RESET} 📱 ${CYAN}Sistema / OS:${RESET} $NOM_DISTRO"
+        echo "${VERDE} (  .  _\\                    ${RESET} 🐢 ${CYAN}Gestor / PM:${RESET} Bacusp v3.2"
+        echo "${VERDE}  / __/                      ${RESET} 🐚 ${CYAN}Shell:${RESET} $SHELL_ACTUAL"
+        echo "${VERDE} / /                         ${RESET} 🧠 ${CYAN}Arquitectura:${RESET} $ARQ"
+        echo "${VERDE} \\/                          ${RESET} 📦 ${CYAN}Paquetes / Pkgs:${RESET} $(pkg list 2>/dev/null | wc -l | tr -d ' ')"
+        ;;
+    debian|ubuntu)
+        echo "${ROJO}  ______                     ${RESET} 👤 ${CYAN}Usuario / User:${RESET} $USUARIO"
+        echo "${ROJO} / ____ \                    ${RESET} 🌀 ${CYAN}Sistema / OS:${RESET} $NOM_DISTRO"
+        echo "${ROJO}| |  | | |                   ${RESET} 🐢 ${CYAN}Gestor / PM:${RESET} Bacusp v3.2 (APT)"
+        echo "${ROJO}| |__| | |                   ${RESET} 🐚 ${CYAN}Shell:${RESET} $SHELL_ACTUAL"
+        echo "${ROJO} \______/                    ${RESET} 🧠 ${CYAN}Arquitectura:${RESET} $ARQ"
+        ;;
+    arch)
+        echo "${CYAN}       /\                    ${RESET} 👤 ${CYAN}Usuario / User:${RESET} $USUARIO"
+        echo "${CYAN}      /  \                   ${RESET} 🏹 ${CYAN}Sistema / OS:${RESET} $NOM_DISTRO"
+        echo "${CYAN}     /\   \                  ${RESET} 🐢 ${CYAN}Gestor / PM:${RESET} Bacusp v3.2 (Pacman)"
+        echo "${CYAN}    /      \                 ${RESET} 🐚 ${CYAN}Shell:${RESET} $SHELL_ACTUAL"
+        echo "${CYAN}   /   ,,   \                ${RESET} 🧠 ${CYAN}Arquitectura:${RESET} $ARQ"
+        echo "${CYAN}  /   |  |  -\               ${RESET}"
+        ;;
+    alpine)
+        echo "${AZUL}   /\                        ${RESET} 👤 ${CYAN}Usuario / User:${RESET} $USUARIO"
+        echo "${AZUL}  /  \  /\                   ${RESET} 🏔️  ${CYAN}Sistema / OS:${RESET} $NOM_DISTRO"
+        echo "${AZUL} /    \/  \                  ${RESET} 🐢 ${CYAN}Gestor / PM:${RESET} Bacusp v3.2 (APK)"
+        echo "${AZUL}/  /\  \   \                 ${RESET} 🐚 ${CYAN}Shell:${RESET} $SHELL_ACTUAL"
+        echo "${AZUL}  /  \  \   \                ${RESET} 🧠 ${CYAN}Arquitectura:${RESET} $ARQ"
+        ;;
+    fedora)
+        echo "${AMARILLO}      _____                  ${RESET} 👤 ${CYAN}Usuario / User:${RESET} $USUARIO"
+        echo "${AMARILLO}     / ___/                  ${RESET} 🎩 ${CYAN}Sistema / OS:${RESET} $NOM_DISTRO"
+        echo "${AMARILLO}    / /__                    ${RESET} 🐢 ${CYAN}Gestor / PM:${RESET} Bacusp v3.2 (DNF)"
+        echo "${AMARILLO}   / ___/                    ${RESET} 🐚 ${CYAN}Shell:${RESET} $SHELL_ACTUAL"
+        echo "${AMARILLO}  /_/                        ${RESET} 🧠 ${CYAN}Arquitectura:${RESET} $ARQ"
+        ;;
+    *)
+        echo "${MAGENTA}   /\_/\                     ${RESET} 👤 ${CYAN}Usuario / User:${RESET} $USUARIO"
+        echo "${MAGENTA}  ( o.o )                    ${RESET} 🐧 ${CYAN}Sistema / OS:${RESET} $NOM_DISTRO"
+        echo "${MAGENTA}   > ^ <                     ${RESET} 🐢 ${CYAN}Gestor / PM:${RESET} Bacusp v3.2"
+        ;;
+esac
+echo ""
