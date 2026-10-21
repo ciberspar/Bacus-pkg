@@ -130,14 +130,16 @@ case "$ACCION" in
 
     bridge|magia|magic)
         [ -z "$PAQUETE" ] && { echo "❌ Falta especificar el paquete para el puente mágico."; exit 1; }
+        
+        # Detectar la ruta del módulo bridge
         if [ -f "$SCRIPT_DIR/../modules/bridge.sh" ]; then
-            sh "$SCRIPT_DIR/../modules/bridge.sh" "$PAQUETE"
+            sh "$SCRIPT_DIR/../modules/bridge.sh" "$PAQUETE" "$ENTORNO"
         elif [ -f "$HOME/Documents/bacus-pkg/modules/bridge.sh" ]; then
-            sh "$HOME/Documents/bacus-pkg/modules/bridge.sh" "$PAQUETE"
+            sh "$HOME/Documents/bacus-pkg/modules/bridge.sh" "$PAQUETE" "$ENTORNO"
         else
             echo "❌ Error: No se encuentra el módulo 'modules/bridge.sh'."
         fi
-        registrar_log "MAGIA_NEGRA" "$PAQUETE"
+        registrar_log "PUENTE_MAGICO" "$PAQUETE"
         ;;
 
     fetch|neofetch|info|sistema)
