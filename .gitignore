@@ -1,0 +1,9 @@
+# Archivos temporales y cachés locales de Bacusp
+.bacusp/
+*.log
+*.tmp
+*.db.bak
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
