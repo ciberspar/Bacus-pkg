@@ -143,37 +143,28 @@ case "$ACCION" in
         ;;
 
     upgrade|self-update)
-        echo "🔄 Sincronizando Bacusp con el repositorio remoto..."
-        RUTA_ACTUAL=$(pwd)
-        REPO_DIR=""
+        echo "🔄 Descargando la última versión de Bacusp v3.5 Pro desde GitHub..."
         
-        if [ -d "$HOME/Documents/bacus-pkg/.git" ]; then
-            REPO_DIR="$HOME/Documents/bacus-pkg"
-        elif [ -d "$HOME/Documents/bacus-pkg.git/.git" ]; then
-            REPO_DIR="$HOME/Documents/bacus-pkg.git"
-        fi
-
-        if [ -n "$REPO_DIR" ]; then
-            cd "$REPO_DIR" || exit
-            if command -v lg2 >/dev/null 2>&1; then
-                lg2 pull
-            else
-                git pull origin main
-            fi
-            
-            if [ -f "bin/bacusp" ]; then
-                cp bin/bacusp ~/Documents/bacusp
-                chmod +x ~/Documents/bacusp
-                cd "$RUTA_ACTUAL" || exit
-                echo "✨ ¡Bacusp se ha actualizado correctamente en el sistema a v3.5 Pro!"
-            else
-                echo "❌ Error: No se encontró el binario en la ruta del repositorio."
-                cd "$RUTA_ACTUAL" || exit
-            fi
+        # Intentar descargar directamente el binario actualizado desde el repositorio oficial
+        URL_RAW="https://raw.githubusercontent.com/Gero-Portella/bacus-pkg/main/bin/bacusp"
+        
+        if command -v curl >/dev/null 2>&1; then
+            curl -sSL "$URL_RAW" -o "$HOME/Documents/bacusp"
+        elif command -v wget >/dev/null 2>&1; then
+            wget -qO "$HOME/Documents/bacusp" "$URL_RAW"
         else
-            echo "❌ No se encontró la carpeta del repositorio Git local."
+            echo "❌ Error: Se necesita curl o wget para actualizar."
+            exit 1
+        fi
+        
+        if [ -f "$HOME/Documents/bacusp" ]; then
+            chmod +x "$HOME/Documents/bacusp"
+            echo "✨ ¡Bacusp se ha actualizado a la versión v3.5 Pro con éxito en el sistema!"
+        else
+            echo "❌ Error al actualizar el binario."
         fi
         ;;
+
 
     modo)
         if [ "$PAQUETE" = "apple" ] && [ "$MODO_EXTRA" = "yes" ]; then
