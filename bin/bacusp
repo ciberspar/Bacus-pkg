@@ -139,7 +139,6 @@ desinstalar_autonomo() {
 }
 
 # --- 4. AYUDA BILINGÜE / DUAL-LANGUAGE HELP ---
-# --- 4. AYUDA BILINGÜE / DUAL-LANGUAGE HELP ---
 mostrar_ayuda() {
     echo ""
     echo "${CYAN}======================================================${RESET}"
@@ -226,5 +225,7 @@ case "$ACCION" in
 
     help|ayuda|h|*)
         mostrar_ayuda
+        ;;
+            search / buscar <paq>     - Busca paquetes y repos / Search packages
         ;;
 esac
