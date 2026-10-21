@@ -1,6 +1,6 @@
 #!/bin/sh
 # ======================================================
-#  BACUSP v3.10 - Gestor Universal y Bilingüe 🐢🌍🧙‍♂️
+#  BACUSP v3.12 - Gestor Universal y Bilingüe 🐢🌍🧙‍♂️
 # ======================================================
 
 ACCION=$1
