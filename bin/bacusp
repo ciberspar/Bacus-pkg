@@ -12,12 +12,20 @@ SCRIPT_DIR=$(dirname "$0")
 
 # --- DETECCIÓN DE ENTORNO ---
 detectar_gestor() {
-    if command -v pkg >/dev/null 2>&1; then
+    if command -v pkg >/dev/null 2>&1 && [ -d "/data/data/com.termux" ]; then
+        echo "termux"
+    elif command -v pkg >/dev/null 2>&1; then
         echo "ios"
     elif command -v winget >/dev/null 2>&1 || [ -n "$WINDIR" ]; then
         echo "windows"
     elif command -v pkgman >/dev/null 2>&1; then
         echo "haiku"
+    elif command -v pkg_add >/dev/null 2>&1; then
+        echo "bsd"
+    elif command -v zypper >/dev/null 2>&1; then
+        echo "opensuse"
+    elif uname -s | grep -qi "SunOS"; then
+        echo "solaris"
     elif command -v apt-get >/dev/null 2>&1; then
         echo "debian"
     elif command -v apk >/dev/null 2>&1; then
@@ -75,6 +83,10 @@ case "$ACCION" in
             alpine) apk add --no-cache "$PAQUETE" ;;
             arch) sudo pacman -S --noconfirm "$PAQUETE" ;;
             fedora) sudo dnf install -y "$PAQUETE" ;;
+            termux) pkg install -y "$PAQUETE" ;;
+            bsd) sudo pkg install -y "$PAQUETE" || pkg_add "$PAQUETE" ;;
+            opensuse) sudo zypper install -y "$PAQUETE" ;;
+            solaris) pkg install "$PAQUETE" ;;
         esac
         registrar_log "INSTALAR" "$PAQUETE"
         echo "✅ ¡$PAQUETE instalado con éxito! / Successfully installed!"
@@ -90,6 +102,11 @@ case "$ACCION" in
             alpine) apk del "$PAQUETE" ;;
             arch) sudo pacman -R --noconfirm "$PAQUETE" ;;
             fedora) sudo dnf remove -y "$PAQUETE" ;;
+            termux) pkg uninstall "$PAQUETE" ;;
+            bsd) sudo pkg delete -y "$PAQUETE" || pkg_delete "$PAQUETE" ;;
+            opensuse) sudo zypper remove -y "$PAQUETE" ;;
+            solaris) pkg uninstall "$PAQUETE" ;;
+
         esac
         registrar_log "BORRAR" "$PAQUETE"
         echo "🗑️ Paquete $PAQUETE eliminado / removed."
