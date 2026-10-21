@@ -37,6 +37,28 @@ ARQ=$(uname -m)
 
 echo ""
 case "$DISTRO" in
+    termux)
+        echo "${VERDE}   ___                        ${RESET} 👤 ${CYAN}Usuario / User:${RESET}$USUARIO"
+        echo "${VERDE}  /   \\ ${RESET} 📱 ${CYAN}Sistema / OS:${RESET} Termux (Android)"
+        echo "${VERDE} \vert{} o o \vert{}${RESET} 🐢 ${CYAN}Gestor / PM:${RESET} Bacusp v3.5 (APT)"
+        echo "${VERDE}  \\___/                       ${RESET} 🐚 ${CYAN}Shell:${RESET}$SHELL_ACTUAL"
+        ;;
+    bsd|freebsd)
+        echo "${ROJO}  \\.-./                        ${RESET} 👤 ${CYAN}Usuario / User:${RESET}$USUARIO"
+        echo "${ROJO} /--v--\\ ${RESET} 😈 ${CYAN}Sistema / OS:${RESET} FreeBSD / OpenBSD"
+        echo "${ROJO} \\\\___//${RESET} 🐢 ${CYAN}Gestor / PM:${RESET} Bacusp v3.5 (pkg)"
+        echo "${ROJO}  `---`                        ${RESET} 🐚 ${CYAN}Shell:${RESET}$SHELL_ACTUAL"
+        ;;
+    opensuse)
+        echo "${VERDE}   \\  /                        ${RESET} 👤 ${CYAN}Usuario / User:${RESET}$USUARIO"
+        echo "${VERDE}    \\/--\\ ${RESET} 🦎 ${CYAN}Sistema / OS:${RESET} openSUSE Linux"
+        echo "${VERDE}     \\Vert{}\vert{}\vert{}${RESET} 🐢 ${CYAN}Gestor / PM:${RESET} Bacusp v3.5 (Zypper)"
+        ;;
+    solaris|sunos)
+        echo "${AMARILLO}   \\  /                        ${RESET} 👤 ${CYAN}Usuario / User:${RESET}$USUARIO"
+        echo "${AMARILLO}    \\/${RESET} ☀️  ${CYAN}Sistema / OS:${RESET} Solaris / Illumos"
+        echo "${AMARILLO}    /\\ ${RESET} 🐢 ${CYID}Gestor / PM:${RESET} Bacusp v3.5 (IPS)"
+        ;;
     ios)
         echo "${VERDE}   __                         ${RESET} 👤 ${CYAN}Usuario / User:${RESET} $USUARIO"
         echo "${VERDE}  /  \\__                     ${RESET} 📱 ${CYAN}Sistema / OS:${RESET} $NOM_DISTRO"
