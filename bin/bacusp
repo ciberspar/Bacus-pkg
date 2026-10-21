@@ -161,7 +161,7 @@ mostrar_ayuda() {
     echo "    clean / limpiar           - Limpia caché / Clear temporary cache"
     echo "    nuke-native / destruir    - Elimina gestor del SO / Remove native PM"
     echo "    help / ayuda              - Muestra esta guía / Display this guide"
-    echo ""
+    echo "    search / buscar <paq>     - Busca paquetes y repos / Search packages
     echo "  Entorno detectado / OS: ${AMARILLO}$ENTORNO${RESET}"
     echo "  Base de datos / Local DB: ${CYAN}$DB_FILE${RESET}"
     echo "${CYAN}======================================================${RESET}"
@@ -225,7 +225,5 @@ case "$ACCION" in
 
     help|ayuda|h|*)
         mostrar_ayuda
-        ;;
-            search / buscar <paq>     - Busca paquetes y repos / Search packages
         ;;
 esac
