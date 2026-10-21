@@ -85,6 +85,7 @@ case "$ACCION" in
         case "$ENTORNO" in
             ios) pkg uninstall "$PAQUETE" ;;
             windows) winget uninstall --id "$PAQUETE" ;;
+            haiku) pkgman uninstall "$PAQUETE" ;;
             debian) sudo apt-get remove -y "$PAQUETE" ;;
             alpine) apk del "$PAQUETE" ;;
             arch) sudo pacman -R --noconfirm "$PAQUETE" ;;
