@@ -70,6 +70,7 @@ case "$ACCION" in
         case "$ENTORNO" in
             ios) pkg install "$PAQUETE" ;;
             windows) winget install --id "$PAQUETE" -e --accept-source-agreements ;;
+            haiku) pkgman install "$PAQUETE" ;;
             debian) sudo apt-get install -y "$PAQUETE" ;;
             alpine) apk add --no-cache "$PAQUETE" ;;
             arch) sudo pacman -S --noconfirm "$PAQUETE" ;;
