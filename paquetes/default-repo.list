@@ -1,0 +1,12 @@
+# ======================================================
+#  BACUSP - Índices de Repositorios Oficiales y Comunidad
+# ======================================================
+
+[Community]
+aur_mirror = https://aur.archlinux.org/packages.gz
+alpine_community = https://dl-cdn.alpinelinux.org/alpine/v3.20/community/
+chiqui_ios_repo = https://repos.chiquios.internal/packages/
+
+[Bridges]
+linux_to_win_layer = active
+sys_isolation = kernel_namespace
