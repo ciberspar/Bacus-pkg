@@ -1,16 +1,19 @@
 #!/bin/sh
 # ======================================================
-#  BACUSP v3.12 - Gestor Universal y Bilingüe 🐢🌍🧙‍♂️
+#  BACUSP v3.15 - Universal Dynamic Package Manager 🐢🚀
+#  Creador: ciberspar
 # ======================================================
 
-ACCION=$1
-PAQUETE=$2
-MODO_EXTRA=$3
-MODO_VALOR=$4
-LOG_FILE="$HOME/.bacusp_history.log"
-SCRIPT_DIR=$(dirname "$0")
+# Colores ANSI
+VERDE='\033[1;32m'
+AZUL='\033[1;34m'
+CYAN='\033[1;36m'
+ROJO='\033[1;31m'
+MAGENTA='\033[1;35m'
+AMARILLO='\033[1;33m'
+RESET='\033[0m'
 
-# --- DETECCIÓN DE ENTORNO ---
+# --- 1. FUNCIÓN DE DETECCIÓN DE ENTORNO EXHAUSTIVA ---
 detectar_gestor() {
     if uname -r | grep -qi "hurd"; then
         echo "hurd"
@@ -48,209 +51,157 @@ detectar_gestor() {
 }
 
 ENTORNO=$(detectar_gestor)
+ACCION=$1
+PAQUETE=$2
 
-# --- REGISTRAR EN HISTORIAL ---
-registrar_log() {
-    ACCION_LOG=$1
-    PKG_LOG=$2
-    FECHA=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "Fecha desconocida")
-    echo "[$FECHA] Entorno: $ENTORNO | Acción: $ACCION_LOG | Paquete: $PKG_LOG" >> "$LOG_FILE"
+# --- 2. BUSCADOR DINÁMICO EN REPOS NATIVOS ---
+buscar_paquete_dinamico() {
+    QUERY=$1
+    ENTORNO_ACTUAL=$2
+
+    case "$ENTORNO_ACTUAL" in
+        debian|ubuntu|hurd)
+            apt-cache search "$QUERY" 2>/dev/null | head -n 1 | awk '{print $1}'
+            ;;
+        arch)
+            pacman -Ssq "$QUERY" 2>/dev/null | head -n 1
+            ;;
+        fedora)
+            dnf search "$QUERY" 2>/dev/null | grep -v "^=" | awk '{print $1}' | head -n 1
+            ;;
+        opensuse)
+            zypper search "$QUERY" 2>/dev/null | grep -i "$QUERY" | head -n 1 | awk -F'|' '{print $2}' | xargs
+            ;;
+        haiku)
+            pkgman search "$QUERY" 2>/dev/null | grep -i "$QUERY" | head -n 1 | awk '{print $1}'
+            ;;
+        windows)
+            winget search "$QUERY" --accept-source-agreements 2>/dev/null | grep -i "$QUERY" | head -n 1 | awk '{print $NF}'
+            ;;
+        bsd)
+            pkg search "$QUERY" 2>/dev/null | head -n 1 | awk '{print $1}'
+            ;;
+        termux|ios)
+            pkg search "$QUERY" 2>/dev/null | head -n 1 | awk '{print $1}'
+            ;;
+        *)
+            echo "$QUERY"
+            ;;
+    esac
 }
 
-# --- BARRA DE PROGRESO ANIMADA ---
-animar_barra() {
-    MENSAJE=$1
-    echo "$MENSAJE"
+# --- 3. BÚSQUEDA DINÁMICA DE CÓDIGO FUENTE (GITHUB FALLBACK) ---
+buscar_fuente_github() {
+    REPO_NAME=$1
+    echo "${AMARILLO}🔍 [Bridge Engine] Buscando código fuente dinámico para: '$REPO_NAME'...${RESET}"
     
-    PASOS="10 30 55 80 100"
-    for P in $PASOS; do
-        BARRA=""
-        LLENOS=$((P / 5))
-        VACIOS=$((20 - LLENOS))
+    URL_REPO=$(curl -s "https://api.github.com/search/repositories?q=$REPO_NAME" | grep '"clone_url":' | head -n 1 | awk -F'"' '{print $4}')
+    
+    if [ -n "$URL_REPO" ]; then
+        echo "${VERDE}📥 Clonando desde repositorio remoto: $URL_REPO${RESET}"
+        DIR_TEMP="/tmp/bacus_$REPO_NAME"
+        rm -rf "$DIR_TEMP"
+        git clone --depth 1 "$URL_REPO" "$DIR_TEMP"
         
-        i=0; while [ $i -lt $LLENOS ]; do BARRA="${BARRA}#"; i=$((i + 1)); done
-        i=0; while [ $i -lt $VACIOS ]; do BARRA="${BARRA}."; i=$((i + 1)); done
-        
-        printf "\r[%s] %3d%% Procesando..." "$BARRA" "$P"
-        sleep 0.06
-    done
+        if [ -d "$DIR_TEMP" ]; then
+            cd "$DIR_TEMP" || exit
+            echo "${CYAN}⚙️ Intentando compilación automática nativa...${RESET}"
+            if [ -f "configure" ]; then
+                ./configure && make && sudo make install
+            elif [ -f "Makefile" ] || [ -f "makefile" ]; then
+                make && sudo make install
+            elif [ -f "CMakeLists.txt" ]; then
+                mkdir -p build && cd build && cmake .. && make && sudo make install
+            elif [ -f "setup.py" ]; then
+                python3 setup.py install
+            else
+                echo "${AMARILLO}⚠️ No se detectó un sistema de compilación estándar. Archivos listos en $DIR_TEMP${RESET}"
+            fi
+        fi
+    else
+        echo "${ROJO}❌ No se encontró código fuente en repositorios remotos para '$REPO_NAME'.${RESET}"
+    fi
+}
+
+# --- 4. MENÚ DE AYUDA BILINGÜE ---
+mostrar_ayuda() {
+    echo ""
+    echo "${CYAN}======================================================${RESET}"
+    echo "${VERDE}  🐢 BACUSP v3.15 - Universal Package Manager${RESET}"
+    echo "${CYAN}======================================================${RESET}"
+    echo "  Uso / Usage:"
+    echo "    bacusp install <paquete>   - Búsqueda, traducción e instalación"
+    echo "    bacusp remove <paquete>    - Borra o desinstala un paquete"
+    echo "    bacusp fetch               - Muestra specs y entorno con estilo"
+    echo "    bacusp help                - Muestra esta ayuda"
+    echo ""
+    echo "  Entorno detectado / Detected OS: ${AMARILLO}$ENTORNO${RESET}"
+    echo "${CYAN}======================================================${RESET}"
     echo ""
 }
 
-# --- ENRUTADOR PRINCIPAL ---
+# --- 5. ENRUTADOR PRINCIPAL ---
 case "$ACCION" in
-    instalar|install|i)
-        [ -z "$PAQUETE" ] && { echo "❌ Falta especificar el paquete / Missing package."; exit 1; }
-        echo "📱 [Bacus Engine] Desplegando '$PAQUETE' en entorno / environment: $ENTORNO..."
-        animar_barra "🚀 Verificando dependencias y repositorios..."
-        case "$ENTORNO" in
-            ios) pkg install "$PAQUETE" ;;
-            windows) winget install --id "$PAQUETE" -e --accept-source-agreements ;;
-            haiku) pkgman install "$PAQUETE" ;;
-            debian) sudo apt-get install -y "$PAQUETE" ;;
-            alpine) apk add --no-cache "$PAQUETE" ;;
-            arch) sudo pacman -S --noconfirm "$PAQUETE" ;;
-            fedora) sudo dnf install -y "$PAQUETE" ;;
-            termux) pkg install -y "$PAQUETE" ;;
-            bsd) sudo pkg install -y "$PAQUETE" || pkg_add "$PAQUETE" ;;
-            opensuse) sudo zypper install -y "$PAQUETE" ;;
-            solaris) pkg install "$PAQUETE" ;;
-            hurd) sudo apt-get install -y "$PAQUETE" ;;
-            minix) pkgin install "$PAQUETE" ;;
-            serenity) echo "⚠️ [SerenityOS] Instalación mediante puertos o fuentes locales." ;;
-            plan9) echo "⚠️ [Plan 9] Sistema de archivos de red y binarios estáticos." ;;
-        esac
-        registrar_log "INSTALAR" "$PAQUETE"
-        echo "✅ ¡$PAQUETE instalado con éxito! / Successfully installed!"
-        ;;
-
-    borrar|remove|uninstall|rm)
-        [ -z "$PAQUETE" ] && { echo "❌ Falta especificar el paquete / Missing package."; exit 1; }
-        case "$ENTORNO" in
-            ios) pkg uninstall "$PAQUETE" ;;
-            windows) winget uninstall --id "$PAQUETE" ;;
-            haiku) pkgman uninstall "$PAQUETE" ;;
-            debian) sudo apt-get remove -y "$PAQUETE" ;;
-            alpine) apk del "$PAQUETE" ;;
-            arch) sudo pacman -R --noconfirm "$PAQUETE" ;;
-            fedora) sudo dnf remove -y "$PAQUETE" ;;
-            termux) pkg uninstall "$PAQUETE" ;;
-            bsd) sudo pkg delete -y "$PAQUETE" || pkg_delete "$PAQUETE" ;;
-            opensuse) sudo zypper remove -y "$PAQUETE" ;;
-            solaris) pkg uninstall "$PAQUETE" ;;
-            hurd) sudo apt-get remove -y "$PAQUETE" ;;
-            minix) pkgin remove "$PAQUETE" ;;
-            serenity) echo "⚠️ [SerenityOS] Eliminación manual en el árbol del sistema." ;;
-            plan9) echo "⚠️ [Plan 9] Gestión manual de directorios." ;;
-
-        esac
-        registrar_log "BORRAR" "$PAQUETE"
-        echo "🗑️ Paquete $PAQUETE eliminado / removed."
-        ;;
-
-    bridge|magia|magic)
-        [ -z "$PAQUETE" ] && { echo "❌ Falta especificar el paquete para el puente mágico."; exit 1; }
+    install|instalar|i)
+        [ -z "$PAQUETE" ] && { echo "${ROJO}❌ Error: Especificá un paquete para instalar.${RESET}"; exit 1; }
         
-        # Detectar la ruta del módulo bridge
-        if [ -f "$SCRIPT_DIR/../modules/bridge.sh" ]; then
-            sh "$SCRIPT_DIR/../modules/bridge.sh" "$PAQUETE" "$ENTORNO"
-        elif [ -f "$HOME/Documents/bacus-pkg/modules/bridge.sh" ]; then
-            sh "$HOME/Documents/bacus-pkg/modules/bridge.sh" "$PAQUETE" "$ENTORNO"
+        echo "${CYAN}🚀 [Bacusp v3.15] Buscando en tiempo real para: '$PAQUETE' en [$ENTORNO]...${RESET}"
+        
+        # Intentar resolver el nombre en el repo nativo del SO
+        PAQUETE_RESUELTO=$(buscar_paquete_dinamico "$PAQUETE" "$ENTORNO")
+
+        if [ -n "$PAQUETE_RESUELTO" ]; then
+            echo "${VERDE}✨ Coincidencia exacta encontrada en repo nativo: '$PAQUETE_RESUELTO'${RESET}"
+            
+            case "$ENTORNO" in
+                debian|ubuntu|hurd) sudo apt-get update && sudo apt-get install -y "$PAQUETE_RESUELTO" ;;
+                arch) sudo pacman -S --noconfirm "$PAQUETE_RESUELTO" ;;
+                alpine) apk add --no-cache "$PAQUETE_RESUELTO" ;;
+                fedora) sudo dnf install -y "$PAQUETE_RESUELTO" ;;
+                opensuse) sudo zypper install -y "$PAQUETE_RESUELTO" ;;
+                termux|ios) pkg install -y "$PAQUETE_RESUELTO" ;;
+                haiku) pkgman install -y "$PAQUETE_RESUELTO" ;;
+                bsd) sudo pkg install -y "$PAQUETE_RESUELTO" || pkg_add "$PAQUETE_RESUELTO" ;;
+                windows) winget install --id "$PAQUETE_RESUELTO" --silent ;;
+                solaris|minix) pkg install "$PAQUETE_RESUELTO" || pkgin install "$PAQUETE_RESUELTO" ;;
+                *) echo "⚠️ Instalando directamente..." ;;
+            esac
         else
-            echo "❌ Error: No se encuentra el módulo 'modules/bridge.sh'."
+            echo "${AMARILLO}⚠️ No está en el repo nativo. Activando Bridge de código fuente (GitHub)...${RESET}"
+            buscar_fuente_github "$PAQUETE"
         fi
-        registrar_log "PUENTE_MAGICO" "$PAQUETE"
         ;;
 
-    fetch|neofetch|info|sistema)
-        if [ -f "$SCRIPT_DIR/../modules/fetch.sh" ]; then
-            sh "$SCRIPT_DIR/../modules/fetch.sh"
+    remove|borrar|rm)
+        [ -z "$PAQUETE" ] && { echo "${ROJO}❌ Error: Especificá un paquete para borrar.${RESET}"; exit 1; }
+        
+        echo "${ROJO}🗑️ [Bacusp] Desinstalando '$PAQUETE' en [$ENTORNO]...${RESET}"
+        case "$ENTORNO" in
+            debian|ubuntu|hurd) sudo apt-get remove -y "$PAQUETE" ;;
+            arch) sudo pacman -R --noconfirm "$PAQUETE" ;;
+            alpine) apk del "$PAQUETE" ;;
+            fedora) sudo dnf remove -y "$PAQUETE" ;;
+            opensuse) sudo zypper remove -y "$PAQUETE" ;;
+            termux|ios) pkg uninstall "$PAQUETE" ;;
+            haiku) pkgman uninstall "$PAQUETE" ;;
+            bsd) sudo pkg delete -y "$PAQUETE" || pkg_delete "$PAQUETE" ;;
+            windows) winget uninstall --id "$PAQUETE" ;;
+            solaris|minix) pkg uninstall "$PAQUETE" || pkgin remove "$PAQUETE" ;;
+            *) echo "⚠️ Desinstalación manual requerida." ;;
+        esac
+        ;;
+
+    fetch|info)
+        if [ -f "$(dirname "$0")/../modules/fetch.sh" ]; then
+            sh "$(dirname "$0")/../modules/fetch.sh"
         elif [ -f "$HOME/Documents/bacus-pkg/modules/fetch.sh" ]; then
             sh "$HOME/Documents/bacus-pkg/modules/fetch.sh"
         else
-            echo "🐢 Bacusp v3.5 Pro ($ENTORNO)"
+            echo "${VERDE}🐢 Bacusp v3.15 - Entorno: $ENTORNO${RESET}"
         fi
         ;;
 
-    clean|limpiar|purge)
-        if [ -f "$SCRIPT_DIR/../modules/clean.sh" ]; then
-            sh "$SCRIPT_DIR/../modules/clean.sh"
-        elif [ -f "$HOME/Documents/bacus-pkg/modules/clean.sh" ]; then
-            sh "$HOME/Documents/bacus-pkg/modules/clean.sh"
-        else
-            rm -rf ~/.cache/* 2>/dev/null
-            echo "✅ Sistema purgado localmente / System cleaned."
-        fi
-        registrar_log "LIMPIAR" "sistema"
-        ;;
-
-    doctor|check)
-        echo "🩺 [Bacus Engine] Diagnóstico integral / System Diagnostic:"
-        echo "  • Entorno / Environment: $ENTORNO"
-        echo "  • Directorio / Path: $SCRIPT_DIR"
-        [ -f "$LOG_FILE" ] && echo "  • Historial / History: Conectado ($LOG_FILE)" || echo "  • Historial: Vacío"
-        [ -d "$SCRIPT_DIR/../modules" ] && echo "  • Módulos externos / External modules: OK"
-        ;;
-
-    history|log)
-        if [ -f "$LOG_FILE" ]; then
-            echo "📜 Registro de actividad reciente en Bacusp / Activity log:"
-            tail -n 25 "$LOG_FILE"
-        else
-            echo "📭 Todavía no hay registros en el historial."
-        fi
-        ;;
-
-    upgrade|self-update)
-        echo "🔄 Descargando la última versión de Bacusp v3.5 Pro desde GitHub..."
-        URL_RAW="https://raw.githubusercontent.com/ciberspar/bacus-pkg/main/bin/bacusp"
-        
-        if command -v curl >/dev/null 2>&1; then
-            curl -sSL "$URL_RAW" -o "$HOME/Documents/bacusp"
-        elif command -v wget >/dev/null 2>&1; then
-            wget -qO "$HOME/Documents/bacusp" "$URL_RAW"
-        else
-            echo "❌ Error: Se necesita curl o wget para actualizar."
-            exit 1
-        fi
-        
-        if [ -f "$HOME/Documents/bacusp" ]; then
-            chmod +x "$HOME/Documents/bacusp"
-            echo "✨ ¡Bacusp se ha actualizado a la versión v3.5 Pro con éxito en el sistema!"
-        else
-            echo "❌ Error al actualizar el binario."
-        fi
-        ;;
-
-    modo)
-        if [ "$PAQUETE" = "apple" ] && [ "$MODO_EXTRA" = "yes" ]; then
-            echo "🍎 [Bacus Sandbox Real] Inicializando aislamiento estricto de Kernel..."
-            case "$ENTORNO" in
-                debian|alpine|arch|fedora)
-                    if command -v bwrap >/dev/null 2>&1; then
-                        echo "🔒 Lanzando burbuja con Bubblewrap (bwrap)..."
-                        bwrap --unshare-all --dev-bind / / --tmpfs /tmp --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 sh
-                    elif command -v unshare >/dev/null 2>&1; then
-                        echo "🔒 Lanzando aislamiento con namespaces (unshare)..."
-                        unshare --fork --pid --mount-proc sh
-                    else
-                        echo "❌ Falta 'bubblewrap' en el sistema para habilitar el sandbox real."
-                    fi
-                    ;;
-                ios)
-                    echo "📱 [iOS] Ejecutando dentro del contenedor de a-shell."
-                    sh
-                    ;;
-                windows)
-                    echo "🪟 [Windows] Abriendo consola aislada..."
-                    cmd
-                    ;;
-                *)
-                    echo "❌ Entorno no compatible con sandbox de kernel."
-                    ;;
-            esac
-        else
-            echo "❌ Comando incorrecto. Probá con: bacusp modo apple yes"
-        fi
-        ;;
-
-    ayuda|help|--help|-h|"")
-        echo "🐢 Bacusp v3.5 Pro - Gestor Universal (Linux, Windows & iOS)"
-        echo "Uso / Usage: bacusp <comando / command> [paquete / package]"
-        echo ""
-        echo "Comandos soportados (Soporte Bilingüe / Bilingual Support):"
-        echo "  • instalar / install <pkg>     : Instala un paquete con barra de progreso"
-        echo "  • borrar / remove <pkg>        : Desinstala un paquete"
-        echo "  • bridge / magia <pkg>         : Aplica magia negra (Puente Linux/Windows)"
-        echo "  • fetch / info                 : Muestra el logo y datos de la distro/iOS"
-        echo "  • doctor / check               : Diagnóstico integral del gestor"
-        echo "  • history / log                : Muestra el historial de comandos"
-        echo "  • limpiar / clean              : Borra cachés y temporales"
-        echo "  • upgrade / self-update        : Actualiza Bacusp a la última versión desde GitHub"
-        echo "  • modo apple yes               : Activa el Sandbox Real de Kernel"
-        ;;
-
-    *)
-        echo "❌ Comando desconocido / Unknown command: '$ACCION'. Escribí 'bacusp ayuda' para ver los comandos."
+    help|ayuda|*)
+        mostrar_ayuda
         ;;
 esac
