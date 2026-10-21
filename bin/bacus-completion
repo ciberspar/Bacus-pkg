@@ -1,0 +1,22 @@
+#!/bin/bash
+# ======================================================================
+#  BACUSP TAB COMPLETION ENGINE 🐢⌨️
+#  Creador: ciberspar
+# ======================================================================
+
+_bacusp_completions() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    # Lista completa de todos tus comandos y módulos
+    opts="install instalar remove borrar purge purgar list listar search buscar upgrade actualizar deps dependencias repo repositorio audit auditar optimize optimizar doctor salud export exportar backup respaldar bridge puente fetch sysinfo info clean limpiar friends amigos nuke-native destruir help ayuda"
+
+    if [ $COMP_CWORD -eq 1 ]; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+}
+
+complete -F _bacusp_completions bacusp
