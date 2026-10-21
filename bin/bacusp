@@ -1,6 +1,6 @@
 #!/bin/sh
 # ======================================================
-#  BACUSP v3.5 Pro - Gestor Universal Unificado 🐢🌍🧙‍♂️
+#  BACUSP v3.10 - Gestor Universal y Bilingüe 🐢🌍🧙‍♂️
 # ======================================================
 
 ACCION=$1
@@ -62,8 +62,8 @@ animar_barra() {
 # --- ENRUTADOR PRINCIPAL ---
 case "$ACCION" in
     instalar|install|i)
-        [ -z "$PAQUETE" ] && { echo "❌ Falta especificar el paquete."; exit 1; }
-        echo "📱 [Bacus Engine] Desplegando '$PAQUETE' en entorno: $ENTORNO..."
+        [ -z "$PAQUETE" ] && { echo "❌ Falta especificar el paquete / Missing package."; exit 1; }
+        echo "📱 [Bacus Engine] Desplegando '$PAQUETE' en entorno / environment: $ENTORNO..."
         animar_barra "🚀 Verificando dependencias y repositorios..."
         case "$ENTORNO" in
             ios) pkg install "$PAQUETE" ;;
@@ -74,11 +74,11 @@ case "$ACCION" in
             fedora) sudo dnf install -y "$PAQUETE" ;;
         esac
         registrar_log "INSTALAR" "$PAQUETE"
-        echo "✅ ¡$PAQUETE instalado con éxito!"
+        echo "✅ ¡$PAQUETE instalado con éxito! / Successfully installed!"
         ;;
 
     borrar|remove|uninstall|rm)
-        [ -z "$PAQUETE" ] && { echo "❌ Falta especificar el paquete."; exit 1; }
+        [ -z "$PAQUETE" ] && { echo "❌ Falta especificar el paquete / Missing package."; exit 1; }
         case "$ENTORNO" in
             ios) pkg uninstall "$PAQUETE" ;;
             windows) winget uninstall --id "$PAQUETE" ;;
@@ -88,7 +88,7 @@ case "$ACCION" in
             fedora) sudo dnf remove -y "$PAQUETE" ;;
         esac
         registrar_log "BORRAR" "$PAQUETE"
-        echo "🗑️ Paquete $PAQUETE eliminado."
+        echo "🗑️ Paquete $PAQUETE eliminado / removed."
         ;;
 
     bridge|magia|magic)
@@ -120,22 +120,22 @@ case "$ACCION" in
             sh "$HOME/Documents/bacus-pkg/modules/clean.sh"
         else
             rm -rf ~/.cache/* 2>/dev/null
-            echo "✅ Sistema purgado localmente."
+            echo "✅ Sistema purgado localmente / System cleaned."
         fi
         registrar_log "LIMPIAR" "sistema"
         ;;
 
     doctor|check)
-        echo "🩺 [Bacus Engine] Diagnóstico integral del sistema:"
-        echo "  • Entorno detectado: $ENTORNO"
-        echo "  • Directorio bin: $SCRIPT_DIR"
-        [ -f "$LOG_FILE" ] && echo "  • Historial de transacciones: Conectado ($LOG_FILE)" || echo "  • Historial: Vacío"
-        [ -d "$SCRIPT_DIR/../modules" ] && echo "  • Módulos externos: Sincronizados OK"
+        echo "🩺 [Bacus Engine] Diagnóstico integral / System Diagnostic:"
+        echo "  • Entorno / Environment: $ENTORNO"
+        echo "  • Directorio / Path: $SCRIPT_DIR"
+        [ -f "$LOG_FILE" ] && echo "  • Historial / History: Conectado ($LOG_FILE)" || echo "  • Historial: Vacío"
+        [ -d "$SCRIPT_DIR/../modules" ] && echo "  • Módulos externos / External modules: OK"
         ;;
 
     history|log)
         if [ -f "$LOG_FILE" ]; then
-            echo "📜 Registro de actividad reciente en Bacusp:"
+            echo "📜 Registro de actividad reciente en Bacusp / Activity log:"
             tail -n 25 "$LOG_FILE"
         else
             echo "📭 Todavía no hay registros en el historial."
@@ -144,9 +144,7 @@ case "$ACCION" in
 
     upgrade|self-update)
         echo "🔄 Descargando la última versión de Bacusp v3.5 Pro desde GitHub..."
-        
-        # Intentar descargar directamente el binario actualizado desde el repositorio oficial
-        URL_RAW="https://raw.githubusercontent.com/Gero-Portella/bacus-pkg/main/bin/bacusp"
+        URL_RAW="https://raw.githubusercontent.com/ciberspar/bacus-pkg/main/bin/bacusp"
         
         if command -v curl >/dev/null 2>&1; then
             curl -sSL "$URL_RAW" -o "$HOME/Documents/bacusp"
@@ -164,7 +162,6 @@ case "$ACCION" in
             echo "❌ Error al actualizar el binario."
         fi
         ;;
-
 
     modo)
         if [ "$PAQUETE" = "apple" ] && [ "$MODO_EXTRA" = "yes" ]; then
@@ -199,22 +196,22 @@ case "$ACCION" in
         ;;
 
     ayuda|help|--help|-h|"")
-        echo "🐢 Bacusp v3.5 Pro - Gestor Universal y Cross-Platform"
-        echo "Uso: bacusp <comando> [argumento]"
+        echo "🐢 Bacusp v3.5 Pro - Gestor Universal (Linux, Windows & iOS)"
+        echo "Uso / Usage: bacusp <comando / command> [paquete / package]"
         echo ""
-        echo "Comandos principales:"
-        echo "  • instalar <pkg>   Instala software nativo"
-        echo "  • borrar <pkg>     Elimina un paquete"
-        echo "  • bridge <pkg>     Aplica magia negra (Puente Linux/Windows)"
-        echo "  • fetch            Muestra el banner interactivo y specs"
-        echo "  • doctor           Diagnóstico del gestor"
-        echo "  • history          Muestra el historial de comandos"
-        echo "  • limpiar          Ejecuta limpieza profunda de caché"
-        echo "  • upgrade          Actualiza Bacusp a la última versión desde GitHub"
-        echo "  • modo apple yes   Activa el Sandbox Real de Kernel"
+        echo "Comandos soportados (Soporte Bilingüe / Bilingual Support):"
+        echo "  • instalar / install <pkg>     : Instala un paquete con barra de progreso"
+        echo "  • borrar / remove <pkg>        : Desinstala un paquete"
+        echo "  • bridge / magia <pkg>         : Aplica magia negra (Puente Linux/Windows)"
+        echo "  • fetch / info                 : Muestra el logo y datos de la distro/iOS"
+        echo "  • doctor / check               : Diagnóstico integral del gestor"
+        echo "  • history / log                : Muestra el historial de comandos"
+        echo "  • limpiar / clean              : Borra cachés y temporales"
+        echo "  • upgrade / self-update        : Actualiza Bacusp a la última versión desde GitHub"
+        echo "  • modo apple yes               : Activa el Sandbox Real de Kernel"
         ;;
 
     *)
-        echo "❌ Comando desconocido: '$ACCION'. Escribí 'bacusp help' para ver la ayuda."
+        echo "❌ Comando desconocido / Unknown command: '$ACCION'. Escribí 'bacusp ayuda' para ver los comandos."
         ;;
 esac
