@@ -95,6 +95,10 @@ case "$ACCION" in
             bsd) sudo pkg install -y "$PAQUETE" || pkg_add "$PAQUETE" ;;
             opensuse) sudo zypper install -y "$PAQUETE" ;;
             solaris) pkg install "$PAQUETE" ;;
+            hurd) sudo apt-get install -y "$PAQUETE" ;;
+            minix) pkgin install "$PAQUETE" ;;
+            serenity) echo "⚠️ [SerenityOS] Instalación mediante puertos o fuentes locales." ;;
+            plan9) echo "⚠️ [Plan 9] Sistema de archivos de red y binarios estáticos." ;;
         esac
         registrar_log "INSTALAR" "$PAQUETE"
         echo "✅ ¡$PAQUETE instalado con éxito! / Successfully installed!"
@@ -114,6 +118,10 @@ case "$ACCION" in
             bsd) sudo pkg delete -y "$PAQUETE" || pkg_delete "$PAQUETE" ;;
             opensuse) sudo zypper remove -y "$PAQUETE" ;;
             solaris) pkg uninstall "$PAQUETE" ;;
+            hurd) sudo apt-get remove -y "$PAQUETE" ;;
+            minix) pkgin remove "$PAQUETE" ;;
+            serenity) echo "⚠️ [SerenityOS] Eliminación manual en el árbol del sistema." ;;
+            plan9) echo "⚠️ [Plan 9] Gestión manual de directorios." ;;
 
         esac
         registrar_log "BORRAR" "$PAQUETE"
