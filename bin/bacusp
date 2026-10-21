@@ -1,8 +1,8 @@
 #!/bin/sh
 # ======================================================================
-#  BACUSP v5.0 Pure Standalone - Universal & Independent Manager 🐢⚙️
+#  BACUSP v5.1 Dual-Lang Pure Standalone Engine 🐢⚙️
 #  Creador: ciberspar
-#  Descripción: Gestor 100% autónomo sin dependencia de apt/apk/pacman/pkg
+#  Filosofía: Bilingüe (ES/EN), Autónomo, Portable y Seguro
 # ======================================================================
 
 # --- COLORES ANSI ---
@@ -31,29 +31,29 @@ log_msg() {
     echo "[$TIMESTAMP] $1" >> "$LOG_FILE"
 }
 
-# --- 1. DETECCIÓN DE ENTORNO (Solo para adaptar rutas y compilación) ---
+# --- 1. DETECCIÓN DE ENTORNO ---
 detectar_entorno() {
-    if uname -r | grep -qi "hurd"; then
+    if uname -r 2>/dev/null | grep -qi "hurd"; then
         echo "hurd"
-    elif [ -d "/net" ] && uname -s | grep -qi "Plan9"; then
+    elif [ -d "/net" ] && uname -s 2>/dev/null | grep -qi "Plan9"; then
         echo "plan9"
     elif [ -d "/data/data/com.termux" ]; then
         echo "termux"
     elif command -v termux-info >/dev/null 2>&1; then
         echo "termux"
-    elif [ -n "$LIBPATH" ] || uname -s | grep -qi "Darwin" || [ -d "/Documents" ]; then
-        echo "ios" # a-shell / iOS sandbox
+    elif [ -n "$LIBPATH" ] || uname -s 2>/dev/null | grep -qi "Darwin" || [ -d "/Documents" ]; then
+        echo "ios"
     elif [ -n "$WINDIR" ] || [ -d "/C/Windows" ]; then
         echo "windows"
     elif command -v pkgman >/dev/null 2>&1; then
         echo "haiku"
-    elif uname -s | grep -qi "SunOS"; then
+    elif uname -s 2>/dev/null | grep -qi "SunOS"; then
         echo "solaris"
-    elif [ -d "/kolibrios" ] || uname -m | grep -qi "kolibri"; then
+    elif [ -d "/kolibrios" ] || uname -m 2>/dev/null | grep -qi "kolibri"; then
         echo "kolibrios"
     elif [ -f "/etc/debian_version" ]; then
         echo "debian"
-    elif [ -f "/etc/SuSE-release" ] || [ -f /etc/os-release ] && grep -qi "suse" /etc/os-release; then
+    elif [ -f "/etc/SuSE-release" ] || ([ -f /etc/os-release ] && grep -qi "suse" /etc/os-release); then
         echo "opensuse"
     elif [ -f "/etc/arch-release" ]; then
         echo "arch"
@@ -66,24 +66,20 @@ ENTORNO=$(detectar_entorno)
 ACCION=$1
 PAQUETE=$2
 
-# --- 2. MOTOR DE INSTALACIÓN PURAMENTE AUTÓNOMO (BACUSP NATIVO) ---
+# --- 2. MOTOR DE INSTALACIÓN AUTÓNOMO ---
 instalar_autonomo() {
     PAQ=$1
-    echo "${CYAN}🌀 [Bacusp Pure Engine] Buscando y empaquetando '$PAQ' para [$ENTORNO]...${RESET}"
+    echo "${CYAN}🌀 [Bacusp Pure Engine] Buscando y preparando '$PAQ' para [$ENTORNO]...${RESET}"
     log_msg "Solicitud de instalación autónoma: $PAQ en $ENTORNO"
 
-    # Verificación especial para sistemas ultra minimalistas o empaquetados
     if [ "$ENTORNO" = "kolibrios" ]; then
-        echo "${AMARILLO}🪶 [Kolibri Mode] Verificando restricciones de bajo consumo para '$PAQ'...${RESET}"
-        # Regla estricta para KolibriOS / entornos ultra livianos
-        echo "⚠️ Los paquetes en este entorno deben ser ejecutables nativos o binarios estáticos mínimos."
+        echo "${AMARILLO}🪶 [Kolibri Mode] Verificando reglas de bajo consumo para '$PAQ'...${RESET}"
     fi
 
-    # Consulta directa a la API pública de GitHub para obtener el código fuente o binario
     URL_REPO=$(curl -s "https://api.github.com/search/repositories?q=$PAQ" | grep '"clone_url":' | head -n 1 | awk -F'"' '{print $4}')
 
     if [ -n "$URL_REPO" ]; then
-        echo "${VERDE}📥 Clonando fuente oficial: $URL_REPO${RESET}"
+        echo "${VERDE}📥 Clonando repositorio oficial: $URL_REPO${RESET}"
         DIR_TEMP="$CACHE_DIR/build_$PAQ"
         rm -rf "$DIR_TEMP"
         git clone --depth 1 "$URL_REPO" "$DIR_TEMP"
@@ -92,7 +88,7 @@ instalar_autonomo() {
             cd "$DIR_TEMP" || exit
             BIN_PATH="$INSTALL_DIR/$PAQ"
 
-            echo "${CYAN}⚙️ Compilando de forma independiente en '$ENTORNO'...${RESET}"
+            echo "${CYAN}⚙️ Compilando nativamente en '$ENTORNO'...${RESET}"
             if [ -f "configure" ]; then
                 ./configure --prefix="$BACUSP_HOME" && make && make install
             elif [ -f "Makefile" ] || [ -f "makefile" ]; then
@@ -102,31 +98,28 @@ instalar_autonomo() {
             elif [ -f "setup.py" ]; then
                 python3 setup.py install --user
             else
-                # Si hay un script ejecutable directo o binario
                 if [ -f "$PAQ" ]; then
                     cp "$PAQ" "$INSTALL_DIR/"
                     chmod +x "$INSTALL_DIR/$PAQ"
                 fi
             fi
 
-            # Registrar en la base de datos propia de Bacusp
             echo "$PAQ|$INSTALL_DIR/$PAQ|$(date "+%Y-%m-%d")" >> "$DB_FILE"
             echo "${VERDE}✨ ¡Instalación autónoma exitosa para '$PAQ'!${RESET}"
             log_msg "Instalado con éxito: $PAQ en $INSTALL_DIR/$PAQ"
         fi
     else
-        echo "${ROJO}❌ No se encontró el paquete '$PAQ' en el índice autónomo de Bacusp.${RESET}"
+        echo "${ROJO}❌ No se encontró el paquete '$PAQ' en el registro autónomo de Bacusp.${RESET}"
         log_msg "Fallo al encontrar paquete: $PAQ"
     fi
 }
 
-# --- 3. MOTOR DE DESINSTALACIÓN PURAMENTE AUTÓNOMO ---
+# --- 3. MOTOR DE DESINSTALACIÓN AUTÓNOMO ---
 desinstalar_autonomo() {
     PAQ=$1
-    echo "${ROJO}🗑️ [Bacusp Pure Engine] Desinstalando '$PAQ' de la base de datos interna...${RESET}"
+    echo "${ROJO}🗑️ [Bacusp Pure Engine] Desinstalando '$PAQ'...${RESET}"
     
     if [ -f "$DB_FILE" ]; then
-        # Buscar la ruta del binario en la base de datos
         REGISTRO=$(grep "^$PAQ|" "$DB_FILE")
         if [ -n "$REGISTRO" ]; then
             RUTA_BIN=$(echo "$REGISTRO" | awk -F'|' '{print $2}')
@@ -134,75 +127,88 @@ desinstalar_autonomo() {
                 rm -f "$RUTA_BIN"
                 echo "${VERDE}✅ Archivo binario eliminado: $RUTA_BIN${RESET}"
             fi
-            # Limpiar de la base de datos
             grep -v "^$PAQ|" "$DB_FILE" > "$DB_FILE.tmp" && mv "$DB_FILE.tmp" "$DB_FILE"
-            echo "${VERDE}✨ '$PAQ' eliminado correctamente por Bacusp.${RESET}"
+            echo "${VERDE}✨ '$PAQ' eliminado correctamente de Bacusp.${RESET}"
             log_msg "Desinstalado: $PAQ"
         else
-            echo "${AMARILLO}⚠️ El paquete '$PAQ' no figura en el registro interno de Bacusp.${RESET}"
+            echo "${AMARILLO}⚠️ El paquete '$PAQ' no figura en el registro interno.${RESET}"
         fi
     else
         echo "${ROJO}❌ No hay base de datos de paquetes instalados.${RESET}"
     fi
 }
 
-# --- 4. AYUDA GENERAL COMPATIBLE ---
+# --- 4. AYUDA BILINGÜE / DUAL-LANGUAGE HELP ---
 mostrar_ayuda() {
     echo ""
     echo "${CYAN}======================================================${RESET}"
-    echo "${VERDE}  🐢 BACUSP v5.0 Pure Standalone - Independent Manager${RESET}"
+    echo "${VERDE}  🐢 BACUSP v5.1 Pure Standalone Engine${RESET}"
     echo "${CYAN}======================================================${RESET}"
-    echo "  Comandos del sistema autónomo:"
-    echo "    bacusp install <paq>   - Compila e instala de forma 100% independiente"
-    echo "    bacusp remove <paq>    - Borra el paquete del registro y rutas de Bacusp"
-    echo "    bacusp list            - Muestra paquetes instalados en la DB propia"
-    echo "    bacusp fetch           - Muestra specs y entorno actual"
-    echo "    bacusp clean           - Limpia caché y archivos temporales"
-    echo "    bacusp help            - Muestra esta ayuda"
+    echo "  Comandos Bilingües / Bilingual Commands:"
+    echo "    install / instalar <paq>  - Compila e instala / Build & install"
+    echo "    remove / borrar <paq>     - Elimina un paquete / Uninstall package"
+    echo "    list / listar / ls        - Muestra instalados / Show installed pkgs"
+    echo "    audit / auditar           - Auditoría de seguridad / Security audit"
+    echo "    optimize / optimizar      - Reduce peso de binarios / Compress binaries"
+    echo "    export / exportar         - Exporta entorno tar.gz / Backup env"
+    echo "    fetch / sysinfo           - Muestra specs y ASCII / Show specs & ASCII"
+    echo "    clean / limpiar           - Limpia caché / Clear temporary cache"
+    echo "    help / ayuda              - Muestra esta guía / Display this guide"
     echo ""
     echo "  Entorno detectado / OS: ${AMARILLO}$ENTORNO${RESET}"
-    echo "  Base de datos interna:  ${CYAN}$DB_FILE${RESET}"
+    echo "  Base de datos / Local DB: ${CYAN}$DB_FILE${RESET}"
     echo "${CYAN}======================================================${RESET}"
     echo ""
 }
 
-# --- 5. ENRUTADOR PRINCIPAL ---
+# --- 5. ENRUTADOR PRINCIPAL BILINGÜE ---
 case "$ACCION" in
     install|instalar|i)
-        [ -z "$PAQUETE" ] && { echo "${ROJO}❌ Error: Especificá un paquete para instalar.${RESET}"; exit 1; }
+        [ -z "$PAQUETE" ] && { echo "${ROJO}❌ Error: Especificá un paquete / Specify a package.${RESET}"; exit 1; }
         instalar_autonomo "$PAQUETE"
         ;;
 
-    remove|borrar|rm)
-        [ -z "$PAQUETE" ] && { echo "${ROJO}❌ Error: Especificá un paquete para desinstalar.${RESET}"; exit 1; }
+    remove|borrar|rm|desinstalar)
+        [ -z "$PAQUETE" ] && { echo "${ROJO}❌ Error: Especificá un paquete / Specify a package.${RESET}"; exit 1; }
         desinstalar_autonomo "$PAQUETE"
         ;;
 
-    list|ls)
+    list|listar|ls)
         echo "${CYAN}📦 Paquetes gestionados por Bacusp Pure Engine:${RESET}"
         if [ -f "$DB_FILE" ]; then
-            cat "$DB_FILE" | awk -F'|' '{print "  - " $1 " (Ruta: " $2 " | Fecha: " $3 ")"}'
+            awk -F'|' '{print "  - " $1 " (Ruta: " $2 " | Fecha: " $3 ")"}' "$DB_FILE"
         else
-            echo "  (No hay paquetes instalados todavía)"
+            echo "  (No hay paquetes instalados todavía / No packages installed yet)"
         fi
         ;;
 
-    clean)
+    audit|auditar)
+        [ -f "$(dirname "$0")/../modules/audit.sh" ] && sh "$(dirname "$0")/../modules/audit.sh"
+        ;;
+
+    optimize|optimizar)
+        [ -f "$(dirname "$0")/../modules/optimize.sh" ] && sh "$(dirname "$0")/../modules/optimize.sh"
+        ;;
+
+    export|exportar)
+        [ -f "$(dirname "$0")/../modules/export.sh" ] && sh "$(dirname "$0")/../modules/export.sh"
+        ;;
+
+    clean|limpiar)
         echo "${CYAN}🧹 Limpiando caché y temporales de Bacusp...${RESET}"
         rm -rf "$CACHE_DIR"/*
-        echo "${VERDE}✅ Caché interna vaciada con éxito.${RESET}"
+        echo "${VERDE}✅ Caché interna vaciada con éxito / Cache cleared.${RESET}"
         ;;
 
     fetch|sysinfo)
         if [ -f "$(dirname "$0")/../modules/fetch.sh" ]; then
             sh "$(dirname "$0")/../modules/fetch.sh"
         else
-            echo "${VERDE}🐢 Bacusp v5.0 Pure Standalone - Entorno: $ENTORNO${RESET}"
-            echo "Directorio de binarios: $INSTALL_DIR"
+            echo "${VERDE}🐢 Bacusp v5.1 Pure Standalone - Entorno: $ENTORNO${RESET}"
         fi
         ;;
 
-    help|ayuda|*)
+    help|ayuda|h|*)
         mostrar_ayuda
         ;;
 esac
