@@ -1,0 +1,25 @@
+name: 📦 Automated Bacusp Release Builder
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Create Standalone Archive
+        run: |
+          mkdir -p build
+          tar -czvf build/bacusp-standalone.tar.gz bin/ modules/ install.sh uninstall.sh README.md LICENSE
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/bacusp-standalone.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
