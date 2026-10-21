@@ -139,20 +139,26 @@ desinstalar_autonomo() {
 }
 
 # --- 4. AYUDA BILINGÜE / DUAL-LANGUAGE HELP ---
+# --- 4. AYUDA BILINGÜE / DUAL-LANGUAGE HELP ---
 mostrar_ayuda() {
     echo ""
     echo "${CYAN}======================================================${RESET}"
     echo "${VERDE}  🐢 BACUSP v5.1 Pure Standalone Engine${RESET}"
     echo "${CYAN}======================================================${RESET}"
-    echo "  Comandos Bilingües / Bilingual Commands:"
+    echo "  Comandos principales / Main Commands:"
     echo "    install / instalar <paq>  - Compila e instala / Build & install"
     echo "    remove / borrar <paq>     - Elimina un paquete / Uninstall package"
     echo "    list / listar / ls        - Muestra instalados / Show installed pkgs"
+    echo ""
+    echo "  Módulos del Sistema / System Modules:"
     echo "    upgrade / actualizar      - Actualiza núcleo y SO / Update core & OS"
     echo "    audit / auditar           - Auditoría de seguridad / Security audit"
     echo "    optimize / optimizar      - Reduce peso de binarios / Compress binaries"
     echo "    export / exportar         - Exporta entorno tar.gz / Backup env"
+    echo "    backup / respaldar        - Copias de seguridad / System backups"
+    echo "    bridge / puente           - Compilación remota GitHub / Remote bridge"
     echo "    fetch / sysinfo           - Muestra specs y ASCII / Show specs & ASCII"
+    echo "    info                      - Diagnóstico profundo / Deep diagnostics"
     echo "    clean / limpiar           - Limpia caché / Clear temporary cache"
     echo "    nuke-native / destruir    - Elimina gestor del SO / Remove native PM"
     echo "    help / ayuda              - Muestra esta guía / Display this guide"
