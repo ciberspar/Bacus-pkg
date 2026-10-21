@@ -1,0 +1,12 @@
+## 🐢 Descripción de Cambios en Bacusp
+
+### ¿Qué hace esta actualización?
+- [ ] Agrega un nuevo módulo en `modules/`
+- [ ] Corrección de bugs o parches de seguridad
+- [ ] Optimización de rendimiento / POSIX Shell
+- [ ] Mejoras en el Watch Dogs o autocompletado
+
+### 🧪 Pruebas realizadas
+- [ ] Probado en iOS (`a-shell`)
+- [ ] Probado en Linux / POSIX Shell
+- [ ] Verificado funcionamiento de `sh install.sh`
