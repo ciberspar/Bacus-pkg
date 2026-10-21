@@ -12,7 +12,15 @@ SCRIPT_DIR=$(dirname "$0")
 
 # --- DETECCIÓN DE ENTORNO ---
 detectar_gestor() {
-    if command -v pkg >/dev/null 2>&1 && [ -d "/data/data/com.termux" ]; then
+    if uname -r | grep -qi "hurd"; then
+        echo "hurd"
+    elif command -v pkgin >/dev/null 2>&1; then
+        echo "minix"
+    elif [ -d "/usr/Serenity" ] || uname -s | grep -qi "Serenity"; then
+        echo "serenity"
+    elif [ -d "/net" ] && uname -s | grep -qi "Plan9"; then
+        echo "plan9"
+    elif command -v pkg >/dev/null 2>&1 && [ -d "/data/data/com.termux" ]; then
         echo "termux"
     elif command -v pkg >/dev/null 2>&1; then
         echo "ios"
