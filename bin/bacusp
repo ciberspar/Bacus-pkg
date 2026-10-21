@@ -166,6 +166,7 @@ mostrar_ayuda() {
     echo "    clean / limpiar           - Limpia caché / Clear temporary cache"
     echo "    nuke-native / destruir    - Elimina gestor del SO / Remove native PM"
     echo "    help / ayuda              - Muestra esta guía / Display this guide"
+    echo ".   friends / amigos          - Red de repos y devs amigos / Friends network"
     echo ""
     echo "  Entorno detectado / OS: ${AMARILLO}$ENTORNO${RESET}"
     echo "  Base de datos / Local DB: ${CYAN}$DB_FILE${RESET}"
@@ -255,5 +256,11 @@ case "$ACCION" in
     doctor|salud)
         [ -f "$(dirname "$0")/../modules/doctor.sh" ] && sh "$(dirname "$0")/../modules/doctor.sh"
         ;;
-
+    friends|amigos)
+        if [ -f "$(dirname "$0")/../modules/friends.sh" ]; then
+            sh "$(dirname "$0")/../modules/friends.sh" "$2" "$3"
+        else
+            echo "${AMARILLO}⚠️ Módulo friends.sh no encontrado en modules/.${RESET}"
+        fi
+        ;;
 esac
