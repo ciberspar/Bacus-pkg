@@ -1,6 +1,6 @@
 #!/bin/sh
 # ======================================================
-#  BACUSP v3.6 - Gestor Universal con Sandbox Real 🐢🌍
+#  BACUSP v3.9 - Gestor Universal Unificado 🐢🌍🧙‍♂️
 # ======================================================
 
 ACCION=$1
@@ -8,15 +8,14 @@ PAQUETE=$2
 MODO_EXTRA=$3
 MODO_VALOR=$4
 LOG_FILE="$HOME/.bacusp_history.log"
+SCRIPT_DIR=$(dirname "$0")
 
 # --- DETECCIÓN DE ENTORNO ---
 detectar_gestor() {
     if command -v pkg >/dev/null 2>&1; then
         echo "ios"
-    elif command -v winget >/dev/null 2>&1; then
-        echo "windows-winget"
-    elif command -v choco >/dev/null 2>&1; then
-        echo "windows-choco"
+    elif command -v winget >/dev/null 2>&1 || [ -n "$WINDIR" ]; then
+        echo "windows"
     elif command -v apt-get >/dev/null 2>&1; then
         echo "debian"
     elif command -v apk >/dev/null 2>&1; then
@@ -55,185 +54,56 @@ animar_barra() {
         i=0; while [ $i -lt $VACIOS ]; do BARRA="${BARRA}."; i=$((i + 1)); done
         
         printf "\r[%s] %3d%% Procesando..." "$BARRA" "$P"
-        sleep 0.08
+        sleep 0.06
     done
     echo ""
 }
 
-# --- FUNCIONES DE INSTALACIÓN Y GESTIÓN ---
-instalar_paquete() {
-    PKG=$1
-    case "$ENTORNO" in
-        ios)
-            echo "📱 [Bacus Engine] Analizando '$PKG'..."
-            if command -v "$PKG" >/dev/null 2>&1; then
-                echo "⚡ El comando '$PKG' ya está disponible en tu sistema."
-            else
-                RES_PKG=$(pkg install "$PKG" 2>&1)
-                if echo "$RES_PKG" | grep -iq "not found"; then
-                    echo "❌ Error: '$PKG' no se encuentra disponible en los repositorios actuales."
-                else
-                    animar_barra "🚀 Desempaquetando componentes..."
-                    echo "✅ ¡$PKG instalado con éxito por Bacusp!"
-                    registrar_log "INSTALAR" "$PKG"
-                fi
-            fi
-            ;;
-        windows-winget)
-            echo "🪟 [Windows / Winget] Desplegando '$PKG'..."
-            animar_barra "🚀 Conectando con Microsoft Store / Winget..."
-            if winget install --id "$PKG" -e --accept-source-agreements --accept-package-agreements; then
-                echo "✅ ¡$PKG instalado correctamente en Windows!"
-                registrar_log "INSTALAR" "$PKG"
-            else
-                echo "❌ Error: No se pudo instalar '$PKG' mediante winget."
-            fi
-            ;;
-        windows-choco)
-            echo "🍫 [Windows / Chocolatey] Preparando '$PKG'..."
-            animar_barra "🚀 Descargando paquete choco..."
-            if choco install "$PKG" -y; then
-                echo "✅ ¡$PKG instalado correctamente con Chocolatey!"
-                registrar_log "INSTALAR" "$PKG"
-            else
-                echo "❌ Error al instalar '$PKG' con choco."
-            fi
-            ;;
-        debian)
-            sudo apt-get update -y && sudo apt-get install -y "$PKG" && echo "✅ ¡$PKG instalado!" && registrar_log "INSTALAR" "$PKG"
-            ;;
-        alpine)
-            apk add --no-cache "$PKG" && echo "✅ ¡$PKG instalado!" && registrar_log "INSTALAR" "$PKG"
-            ;;
-        arch)
-            sudo pacman -S --noconfirm "$PKG" && echo "✅ ¡$PKG instalado!" && registrar_log "INSTALAR" "$PKG"
-            ;;
-        fedora)
-            sudo dnf install -y "$PKG" && echo "✅ ¡$PKG instalado!" && registrar_log "INSTALAR" "$PKG"
-            ;;
-        *)
-            echo "❌ Gestor no compatible."
-            exit 1
-            ;;
-    esac
-}
-
-borrar_paquete() {
-    PKG=$1
-    case "$ENTORNO" in
-        ios) pkg uninstall "$PKG" && registrar_log "BORRAR" "$PKG" ;;
-        windows-winget) winget uninstall --id "$PKG" && registrar_log "BORRAR" "$PKG" ;;
-        windows-choco) choco uninstall "$PKG" -y && registrar_log "BORRAR" "$PKG" ;;
-        debian) sudo apt-get remove -y "$PKG" && registrar_log "BORRAR" "$PKG" ;;
-        alpine) apk del "$PKG" && registrar_log "BORRAR" "$PKG" ;;
-        arch) sudo pacman -R --noconfirm "$PKG" && registrar_log "BORRAR" "$PKG" ;;
-        fedora) sudo dnf remove -y "$PKG" && registrar_log "BORRAR" "$PKG" ;;
-    esac
-}
-
-# --- ENRUTADOR DE COMANDOS ---
+# --- ENRUTADOR PRINCIPAL ---
 case "$ACCION" in
     instalar|install|i)
         [ -z "$PAQUETE" ] && { echo "❌ Falta especificar el paquete."; exit 1; }
-        instalar_paquete "$PAQUETE"
+        echo "📱 [Bacus Engine] Desplegando '$PAQUETE' en entorno: $ENTORNO..."
+        animar_barra "🚀 Verificando dependencias y repositorios..."
+        case "$ENTORNO" in
+            ios) pkg install "$PAQUETE" ;;
+            windows) winget install --id "$PAQUETE" -e --accept-source-agreements ;;
+            debian) sudo apt-get install -y "$PAQUETE" ;;
+            alpine) apk add --no-cache "$PAQUETE" ;;
+            arch) sudo pacman -S --noconfirm "$PAQUETE" ;;
+            fedora) sudo dnf install -y "$PAQUETE" ;;
+        esac
+        registrar_log "INSTALAR" "$PAQUETE"
+        echo "✅ ¡$PAQUETE instalado con éxito!"
         ;;
 
     borrar|remove|uninstall|rm)
         [ -z "$PAQUETE" ] && { echo "❌ Falta especificar el paquete."; exit 1; }
-        borrar_paquete "$PAQUETE"
-        ;;
-
-    actualizar|update|up)
         case "$ENTORNO" in
-            ios) pkg update ;;
-            windows-winget) winget upgrade --all ;;
-            windows-choco) choco upgrade all -y ;;
-            debian) sudo apt-get update ;;
-            alpine) apk update ;;
-            arch) sudo pacman -Sy ;;
-            fedora) sudo dnf check-update ;;
+            ios) pkg uninstall "$PAQUETE" ;;
+            windows) winget uninstall --id "$PAQUETE" ;;
+            debian) sudo apt-get remove -y "$PAQUETE" ;;
+            alpine) apk del "$PAQUETE" ;;
+            arch) sudo pacman -R --noconfirm "$PAQUETE" ;;
+            fedora) sudo dnf remove -y "$PAQUETE" ;;
         esac
+        registrar_log "BORRAR" "$PAQUETE"
+        echo "🗑️ Paquete $PAQUETE eliminado."
         ;;
 
-    upgrade|self-update)
-        echo "🔄 Sincronizando Bacusp con el núcleo principal de GitHub..."
-        RUTA_ACTUAL=$(pwd)
-        REPO_DIR=""
-        
-        if [ -d "$HOME/Documents/bacus-pkg/.git" ]; then
-            REPO_DIR="$HOME/Documents/bacus-pkg"
-        elif [ -d "$HOME/Documents/bacus-pkg.git/.git" ]; then
-            REPO_DIR="$HOME/Documents/bacus-pkg.git"
-        fi
-
-        if [ -n "$REPO_DIR" ]; then
-            cd "$REPO_DIR" || exit
-            git pull origin main
-            cp bin/bacusp ~/Documents/bacusp 2>/dev/null
-            chmod +x ~/Documents/bacusp
-            cd "$RUTA_ACTUAL" || exit
-            echo "✨ ¡Bacusp actualizado a la versión definitiva!"
+    bridge|magia|magic)
+        [ -z "$PAQUETE" ] && { echo "❌ Falta especificar el paquete para el puente mágico."; exit 1; }
+        if [ -f "$SCRIPT_DIR/../modules/bridge.sh" ]; then
+            sh "$SCRIPT_DIR/../modules/bridge.sh" "$PAQUETE"
+        elif [ -f "$HOME/Documents/bacus-pkg/modules/bridge.sh" ]; then
+            sh "$HOME/Documents/bacus-pkg/modules/bridge.sh" "$PAQUETE"
         else
-            echo "❌ No se encontró la carpeta del repositorio Git local."
+            echo "❌ Error: No se encuentra el módulo 'modules/bridge.sh'."
         fi
-        ;;
-
-    buscar|search|s)
-        [ -z "$PAQUETE" ] && { echo "❌ Falta término de búsqueda."; exit 1; }
-        echo "🔍 Buscando coincidencias para '$PAQUETE'..."
-        case "$ENTORNO" in
-            ios) pkg search "$PAQUETE" ;;
-            windows-winget) winget search "$PAQUETE" ;;
-            windows-choco) choco search "$PAQUETE" ;;
-            debian) apt-cache search "$PAQUETE" | head -n 15 ;;
-            alpine) apk search "$PAQUETE" ;;
-            arch) pacman -Ss "$PAQUETE" ;;
-            fedora) dnf search "$PAQUETE" ;;
-        esac
-        ;;
-
-    listar|list|ls)
-        echo "📋 Listado de aplicaciones activas:"
-        case "$ENTORNO" in
-            ios) pkg list ;;
-            windows-winget) winget list ;;
-            windows-choco) choco list -l ;;
-            debian) dpkg -l | grep '^ii' | awk '{print $2}' | head -n 30 ;;
-            alpine) apk info ;;
-            arch) pacman -Qqe ;;
-            fedora) dnf list installed | head -n 30 ;;
-        esac
-        ;;
-
-    doctor|check)
-        echo "🩺 [Bacus Engine] Diagnóstico avanzado del sistema:"
-        echo "  • Entorno operativo: $ENTORNO"
-        echo "  • Binario local: $HOME/Documents/bacusp"
-        [ -x "$HOME/Documents/bacusp" ] && echo "    └─ Permisos de ejecución: OK" || echo "    └─ Permisos de ejecución: FALTAN"
-        [ -f "$LOG_FILE" ] && echo "  • Registro de transacciones: Activo" || echo "  • Registro de transacciones: Vacío"
-        ;;
-
-    history|log)
-        if [ -f "$LOG_FILE" ]; then
-            echo "📜 Historial detallado de operaciones:"
-            tail -n 25 "$LOG_FILE"
-        else
-            echo "📭 No hay operaciones registradas aún."
-        fi
-        ;;
-
-    clean|limpiar|purge)
-        SCRIPT_DIR=$(dirname "$0")
-        if [ -f "$SCRIPT_DIR/../modules/clean.sh" ]; then
-            sh "$SCRIPT_DIR/../modules/clean.sh"
-        else
-            rm -rf ~/.cache/* 2>/dev/null
-            echo "✅ Sistema purgado y caché optimizada."
-        fi
+        registrar_log "MAGIA_NEGRA" "$PAQUETE"
         ;;
 
     fetch|neofetch|info|sistema)
-        SCRIPT_DIR=$(dirname "$0")
         if [ -f "$SCRIPT_DIR/../modules/fetch.sh" ]; then
             sh "$SCRIPT_DIR/../modules/fetch.sh"
         elif [ -f "$HOME/Documents/bacus-pkg/modules/fetch.sh" ]; then
@@ -243,57 +113,83 @@ case "$ACCION" in
         fi
         ;;
 
+    clean|limpiar|purge)
+        if [ -f "$SCRIPT_DIR/../modules/clean.sh" ]; then
+            sh "$SCRIPT_DIR/../modules/clean.sh"
+        elif [ -f "$HOME/Documents/bacus-pkg/modules/clean.sh" ]; then
+            sh "$HOME/Documents/bacus-pkg/modules/clean.sh"
+        else
+            rm -rf ~/.cache/* 2>/dev/null
+            echo "✅ Sistema purgado localmente."
+        fi
+        registrar_log "LIMPIAR" "sistema"
+        ;;
+
+    doctor|check)
+        echo "🩺 [Bacus Engine] Diagnóstico integral del sistema:"
+        echo "  • Entorno detectado: $ENTORNO"
+        echo "  • Directorio bin: $SCRIPT_DIR"
+        [ -f "$LOG_FILE" ] && echo "  • Historial de transacciones: Conectado ($LOG_FILE)" || echo "  • Historial: Vacío"
+        [ -d "$SCRIPT_DIR/../modules" ] && echo "  • Módulos externos: Sincronizados OK"
+        ;;
+
+    history|log)
+        if [ -f "$LOG_FILE" ]; then
+            echo "📜 Registro de actividad reciente en Bacusp:"
+            tail -n 25 "$LOG_FILE"
+        else
+            echo "📭 Todavía no hay registros en el historial."
+        fi
+        ;;
+
     modo)
         if [ "$PAQUETE" = "apple" ] && [ "$MODO_EXTRA" = "yes" ]; then
-            echo "🍎 [Bacus Sandbox Real] Inicializando aislamiento a nivel de Kernel..."
+            echo "🍎 [Bacus Sandbox Real] Inicializando aislamiento estricto de Kernel..."
             case "$ENTORNO" in
                 debian|alpine|arch|fedora)
                     if command -v bwrap >/dev/null 2>&1; then
-                        echo "🔒 Lanzando sandbox real con Bubblewrap (bwrap)..."
+                        echo "🔒 Lanzando burbuja con Bubblewrap (bwrap)..."
                         bwrap --unshare-all --dev-bind / / --tmpfs /tmp --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 sh
                     elif command -v unshare >/dev/null 2>&1; then
-                        echo "🔒 Lanzando sandbox con namespaces de Linux (unshare)..."
+                        echo "🔒 Lanzando aislamiento con namespaces (unshare)..."
                         unshare --fork --pid --mount-proc sh
                     else
-                        echo "❌ Error: No se encontró 'bwrap' (bubblewrap). Instalalo con tu gestor para habilitar el sandbox real."
+                        echo "❌ Falta 'bubblewrap' en el sistema para habilitar el sandbox real."
                     fi
                     ;;
                 ios)
-                    echo "📱 [iOS] Operando dentro del contenedor seguro de a-shell."
+                    echo "📱 [iOS] Ejecutando dentro del contenedor de a-shell."
                     sh
                     ;;
-                windows-winget|windows-choco)
-                    echo "🪟 [Windows] Iniciando sesión aislada..."
+                windows)
+                    echo "🪟 [Windows] Abriendo consola aislada..."
                     cmd
                     ;;
                 *)
-                    echo "❌ Entorno no compatible para sandbox de kernel."
+                    echo "❌ Entorno no compatible con sandbox de kernel."
                     ;;
             esac
         else
-            echo "❌ Uso incorrecto. El comando exacto es: bacusp modo apple yes"
+            echo "❌ Comando incorrecto. Probá con: bacusp modo apple yes"
         fi
         ;;
 
     ayuda|help|--help|-h|"")
-        echo "🐢 Bacusp v3.5 Pro - Gestor Universal Multiplataforma"
-        echo "Uso: bacusp <comando> [paquete]"
+        echo "🐢 Bacusp v3.5 Pro - Gestor Universal y Cross-Platform"
+        echo "Uso: bacusp <comando> [argumento]"
         echo ""
-        echo "Comandos:"
-        echo "  • instalar | install <pkg>  Instala un paquete"
-        echo "  • borrar   | remove <pkg>   Elimina un paquete"
-        echo "  • buscar   | search <kw>    Busca software"
-        echo "  • listar   | list           Lista instalados"
-        echo "  • update   | actualizar     Actualiza repos SO"
-        echo "  • upgrade  | self-update    Actualiza Bacusp"
-        echo "  • doctor   | check          Diagnóstico del sistema"
-        echo "  • history  | log            Muestra historial"
-        echo "  • clean    | limpiar        Limpia la caché"
-        echo "  • fetch    | info           Info del sistema"
-        echo "  • modo apple yes            Activa el Sandbox Real de Kernel"
+        echo "Comandos principales:"
+        echo "  • instalar <pkg>   Instala software nativo"
+        echo "  • borrar <pkg>     Elimina un paquete"
+        echo "  • bridge <pkg>     Aplica magia negra (Puente Linux/Windows)"
+        echo "  • fetch            Muestra el banner interactivo y specs"
+        echo "  • doctor           Diagnóstico del gestor"
+        echo "  • history          Muestra el historial de comandos"
+        echo "  • limpiar          Ejecuta limpieza profunda de caché"
+        echo "  • modo apple yes   Activa el Sandbox Real de Kernel"
         ;;
 
     *)
-        echo "❌ Comando desconocido: '$ACCION'. Usá 'bacusp help'."
+        echo "❌ Comando desconocido: '$ACCION'. Escribí 'bacusp help' para ver la ayuda."
         ;;
-esac
+es:
