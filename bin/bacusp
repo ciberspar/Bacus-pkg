@@ -2,7 +2,7 @@
 # ======================================================================
 #  BACUSP v5.1 Dual-Lang Pure Standalone Engine 🐢⚙️
 #  Creador: ciberspar
-#  Filosofía: Bilingüe (ES/EN), Autónomo, Portable y Seguro
+#  Filosofía: Bilingüe (ES/EN), Autónomo, Portable y Robusto
 # ======================================================================
 
 # --- COLORES ANSI ---
@@ -148,6 +148,7 @@ mostrar_ayuda() {
     echo "    install / instalar <paq>  - Compila e instala / Build & install"
     echo "    remove / borrar <paq>     - Elimina un paquete / Uninstall package"
     echo "    list / listar / ls        - Muestra instalados / Show installed pkgs"
+    echo "    upgrade / actualizar      - Actualiza núcleo y SO / Update core & OS"
     echo "    audit / auditar           - Auditoría de seguridad / Security audit"
     echo "    optimize / optimizar      - Reduce peso de binarios / Compress binaries"
     echo "    export / exportar         - Exporta entorno tar.gz / Backup env"
@@ -182,16 +183,103 @@ case "$ACCION" in
         fi
         ;;
 
+    upgrade|actualizar|u)
+        if [ -f "$(dirname "$0")/../modules/upgrade.sh" ]; then
+            sh "$(dirname "$0")/../modules/upgrade.sh"
+        else
+            # Módulo integrado por defecto con manejo de avisos si no hay actualizaciones
+            echo ""
+            echo "${CYAN}======================================================${RESET}"
+            echo "${VERDE}  🐢 BACUSP System & Core Upgrade Engine${RESET}"
+            echo "${CYAN}======================================================${RESET}"
+            echo ""
+            
+            echo "${AZUL}🔄 [1/2] Verificando actualizaciones del núcleo de Bacusp...${RESET}"
+            BACUSP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+            
+            if [ -d "$BACUSP_DIR/.git" ]; then
+                SALIDA_GIT=$(cd "$BACUSP_DIR" && git pull origin main 2>/dev/null || cd "$BACUSP_DIR" && git pull origin master 2>/dev/null)
+                if echo "$SALIDA_GIT" | grep -qi "Already up to date"; then
+                    echo "${VERV:-$VERDE}  ✨ El núcleo de Bacusp ya está en su última versión.${RESET}"
+                elif [ -n "$SALIDA_GIT" ]; then
+                    echo "${VERDE}  ✅ Bacusp actualizado con éxito.${RESET}"
+                else
+                    echo "${AMARILLO}  ⚠️ No se pudo verificar la red o el repositorio remoto.${RESET}"
+                fi
+            else
+                echo "${AMARILLO}  ⚠️ No se detectó repositorio git. Bacusp opera en modo local estático.${RESET}"
+            fi
+
+            echo ""
+            echo "${AZUL}🖥️  [2/2] Verificando actualizaciones del Sistema Operativo ($ENTORNO)...${RESET}"
+            
+            ACTUALIZADO=0
+            case "$ENTORNO" in
+                debian|ubuntu)
+                    if command -v apt-get >/dev/null 2>&1; then
+                        sudo apt-get update
+                        # Verificar si hay paquetes para actualizar
+                        UPGRADABLES=$(apt-get -s upgrade 2>/dev/null | grep -i "upgraded,")
+                        echo "  $UPGRADABLES"
+                        sudo apt-get upgrade -y
+                        ACTUALIZADO=1
+                    fi
+                    ;;
+                arch)
+                    if command -v pacman >/dev/null 2>&1; then
+                        sudo pacman -Sy
+                        ACTUALIZADO=1
+                        sudo pacman -Syu --noconfirm
+                    fi
+                    ;;
+                alpine)
+                    if command -v apk >/dev/null 2>&1; then
+                        apk update
+                        ACTUALIZADO=1
+                        apk upgrade
+                    fi
+                    ;;
+                fedora)
+                    if command -v dnf >/dev/null 2>&1; then
+                        sudo dnf check-update
+                        ACTUALIZADO=1
+                        sudo dnf upgrade -y
+                    fi
+                    ;;
+                opensuse)
+                    if command -v zypper >/dev/null 2>&1; then
+                        sudo zypper refresh
+                        ACTUALIZADO=1
+                        sudo zypper update -y
+                    fi
+                    ;;
+                ios|termux)
+                    if command -v pkg >/dev/null 2>&1; then
+                        pkg upgrade -y 2>/dev/null
+                        ACTUALIZADO=1
+                    fi
+                    ;;
+            esac
+
+            if [ "$ACTUALIZADO" -eq 0 ]; then
+                echo "${VERDE}  ✨ El sistema está al día o no requiere gestor nativo (Modo Pure Standalone).${RESET}"
+            else
+                echo "${VERDE}  ✨ ¡Proceso de actualización del sistema finalizado!${RESET}"
+            fi
+            echo ""
+        fi
+        ;;
+
     audit|auditar)
-        [ -f "$(dirname "$0")/../modules/audit.sh" ] && sh "$(dirname "$0")/../modules/audit.sh"
+        [ -f "$(dirname "$0")/../modules/audit.sh" ] && sh "$(dirname "$0")/../modules/audit.sh" || echo "${AMARILLO}⚠️ Módulo audit no encontrado.${RESET}"
         ;;
 
     optimize|optimizar)
-        [ -f "$(dirname "$0")/../modules/optimize.sh" ] && sh "$(dirname "$0")/../modules/optimize.sh"
+        [ -f "$(dirname "$0")/../modules/optimize.sh" ] && sh "$(dirname "$0")/../modules/optimize.sh" || echo "${AMARILLO}⚠️ Módulo optimize no encontrado.${RESET}"
         ;;
 
     export|exportar)
-        [ -f "$(dirname "$0")/../modules/export.sh" ] && sh "$(dirname "$0")/../modules/export.sh"
+        [ -f "$(dirname "$0")/../modules/export.sh" ] && sh "$(dirname "$0")/../modules/export.sh" || echo "${AMARILLO}⚠️ Módulo export no encontrado.${RESET}"
         ;;
 
     clean|limpiar)
@@ -205,6 +293,14 @@ case "$ACCION" in
             sh "$(dirname "$0")/../modules/fetch.sh"
         else
             echo "${VERDE}🐢 Bacusp v5.1 Pure Standalone - Entorno: $ENTORNO${RESET}"
+        fi
+        ;;
+
+    nuke-native|destruir-nativo|nuke)
+        if [ -f "$(dirname "$0")/../modules/nuke.sh" ]; then
+            sh "$(dirname "$0")/../modules/nuke.sh"
+        else
+            echo "${AMARILLO}⚠️ Módulo nuke.sh no encontrado.${RESET}"
         fi
         ;;
 
