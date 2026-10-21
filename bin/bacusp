@@ -147,12 +147,17 @@ mostrar_ayuda() {
     echo "  Comandos principales / Main Commands:"
     echo "    install / instalar <paq>  - Compila e instala / Build & install"
     echo "    remove / borrar <paq>     - Elimina un paquete / Uninstall package"
+    echo "    purge / purgar <paq>      - Elimina paquete y config / Deep purge"
     echo "    list / listar / ls        - Muestra instalados / Show installed pkgs"
+    echo "    search / buscar <paq>     - Busca paquetes en GitHub / Search pkgs"
     echo ""
-    echo "  Módulos del Sistema / System Modules:"
+    echo "  Módulos de Sistema & Repositorios / System Modules:"
     echo "    upgrade / actualizar      - Actualiza núcleo y SO / Update core & OS"
+    echo "    deps / dependencias <paq> - Revisa dependencias / Check dependencies"
+    echo "    repo / repositorio        - Gestiona repositorios / Manage repos"
     echo "    audit / auditar           - Auditoría de seguridad / Security audit"
     echo "    optimize / optimizar      - Reduce peso de binarios / Compress binaries"
+    echo "    doctor / salud            - Diagnóstico del sistema / System check"
     echo "    export / exportar         - Exporta entorno tar.gz / Backup env"
     echo "    backup / respaldar        - Copias de seguridad / System backups"
     echo "    bridge / puente           - Compilación remota GitHub / Remote bridge"
@@ -161,7 +166,7 @@ mostrar_ayuda() {
     echo "    clean / limpiar           - Limpia caché / Clear temporary cache"
     echo "    nuke-native / destruir    - Elimina gestor del SO / Remove native PM"
     echo "    help / ayuda              - Muestra esta guía / Display this guide"
-    echo "    search / buscar <paq>     - Busca paquetes y repos / Search packages"
+    echo ""
     echo "  Entorno detectado / OS: ${AMARILLO}$ENTORNO${RESET}"
     echo "  Base de datos / Local DB: ${CYAN}$DB_FILE${RESET}"
     echo "${CYAN}======================================================${RESET}"
@@ -234,4 +239,21 @@ case "$ACCION" in
             echo "${AMARILLO}⚠️ Módulo search.sh no encontrado en modules/.${RESET}"
         fi
         ;;
+            purge|purgar)
+        [ -z "$PAQUETE" ] && { echo "${ROJO}❌ Error: Especificá un paquete.${RESET}"; exit 1; }
+        [ -f "$(dirname "$0")/../modules/purge.sh" ] && sh "$(dirname "$0")/../modules/purge.sh" "$PAQUETE"
+        ;;
+
+    deps|dependencias)
+        [ -z "$PAQUETE" ] && { echo "${ROJO}❌ Error: Especificá un paquete.${RESET}"; exit 1; }
+        [ -f "$(dirname "$0")/../modules/deps.sh" ] && sh "$(dirname "$0")/../modules/deps.sh" "$PAQUETE"
+        ;;
+    repo|repositorio)
+        [ -f "$(dirname "$0")/../modules/repo.sh" ] && sh "$(dirname "$0")/../modules/repo.sh" "$PAQUETE" "$3"
+        ;;
+
+    doctor|salud)
+        [ -f "$(dirname "$0")/../modules/doctor.sh" ] && sh "$(dirname "$0")/../modules/doctor.sh"
+        ;;
+
 esac
