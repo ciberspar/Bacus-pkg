@@ -1,6 +1,6 @@
 #!/bin/sh
 # ======================================================
-#  Módulo Fetch Universal - bacus-pkg 🐢🐧📱🪟
+#  Módulo Fetch Universal - bacus-pkg 🐢🐧📱🪟🎨
 # ======================================================
 
 # Colores ANSI
@@ -19,6 +19,9 @@ if command -v pkg >/dev/null 2>&1; then
 elif command -v winget >/dev/null 2>&1 || command -v choco >/dev/null 2>&1 || [ -n "$WINDIR" ]; then
     DISTRO="windows"
     NOM_DISTRO="Microsoft Windows"
+elif command -v pkgman >/dev/null 2>&1; then
+    DISTRO="haiku"
+    NOM_DISTRO="Haiku OS"
 elif [ -f /etc/os-release ]; then
     . /etc/os-release
     DISTRO=$ID
@@ -48,6 +51,13 @@ case "$DISTRO" in
         echo "                            🐢 ${CYAN}Gestor / PM:${RESET} Bacusp v3.5 (Winget/Choco)"
         echo "${AZUL}   ██████${RESET}  ${AMARILLO}██████${RESET}           🐚 ${CYAN}Shell:${RESET} $SHELL_ACTUAL"
         echo "${AZUL}   ██████${RESET}  ${AMARILLO}██████${RESET}           🧠 ${CYAN}Arquitectura:${RESET} $ARQ"
+        ;;
+    haiku)
+        echo "${AMARILLO}    @@@@@@@@@@@@      ${RESET} 👤 ${CYAN}Usuario / User:${RESET} $USUARIO"
+        echo "${AMARILLO}  @@@@@@@@@@@@@@@@    ${RESET} 🍃 ${CYAN}Sistema / OS:${RESET} $NOM_DISTRO"
+        echo "${AMARILLO}    @@@@@@@@@@@@      ${RESET} 🐢 ${CYAN}Gestor / PM:${RESET} Bacusp v3.5 (pkgman)"
+        echo "${AMARILLO}      @@@@@@@@@@      ${RESET} 🐚 ${CYAN}Shell:${RESET} $SHELL_ACTUAL"
+        echo "${AMARILLO}     @@@@  @@@@       ${RESET} 🧠 ${CYAN}Arquitectura:${RESET} $ARQ"
         ;;
     debian|ubuntu)
         echo "${ROJO}  ______                     ${RESET} 👤 ${CYAN}Usuario / User:${RESET} $USUARIO"
