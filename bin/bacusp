@@ -16,6 +16,8 @@ detectar_gestor() {
         echo "ios"
     elif command -v winget >/dev/null 2>&1 || [ -n "$WINDIR" ]; then
         echo "windows"
+    elif command -v pkgman >/dev/null 2>&1; then
+        echo "haiku"
     elif command -v apt-get >/dev/null 2>&1; then
         echo "debian"
     elif command -v apk >/dev/null 2>&1; then
