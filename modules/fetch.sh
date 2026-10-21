@@ -37,6 +37,26 @@ ARQ=$(uname -m)
 
 echo ""
 case "$DISTRO" in
+    hurd)
+        echo "${CYAN}    _____                      ${RESET} 👤 ${CYAN}Usuario / User:${RESET} $USUARIO"
+        echo "${CYAN}   / ___ \\                     ${RESET} 🧬 ${CYAN}Sistema / OS:${RESET} GNU/Hurd (Microkernel)"
+        echo "${CYAN}  | |   | |                    ${RESET} 🐢 ${CYAN}Gestor / PM:${RESET} Bacusp v3.5 (APT/Dpkg)"
+        ;;
+    minix)
+        echo "${AMARILLO}   _  _                       ${RESET} 👤 ${CYAN}Usuario / User:${RESET} $USUARIO"
+        echo "${AMARILLO}  | || |                      ${RESET} 📚 ${CYAN}Sistema / OS:${RESET} Minix OS (Tanenbaum)"
+        echo "${AMARILLO}  | || |_                     ${RESET} 🐢 ${CYAN}Gestor / PM:${RESET} Bacusp v3.5 (Pkgin)"
+        ;;
+    serenity)
+        echo "${MAGENTA}   ╔══════╗                   ${RESET} 👤 ${CYAN}Usuario / User:${RESET} $USUARIO"
+        echo "${MAGENTA}   ║ 90s  ║                   ${RESET} 🖥️  ${CYAN}Sistema / OS:${RESET} SerenityOS (Retro 90s)"
+        echo "${MAGENTA}   ╚══════╝                   ${RESET} 🐢 ${CYAN}Gestor / PM:${RESET} Bacusp v3.5 (Ports)"
+        ;;
+    plan9)
+        echo "${AZUL}   ___                        ${RESET} 👤 ${CYAN}Usuario / User:${RESET} $USUARIO"
+        echo "${AZUL}  / _ \\                       ${RESET} 🌌 ${CYAN}Sistema / OS:${RESET} Plan 9 from Bell Labs"
+        echo "${AZUL} | (_) |                      ${RESET} 🐢 ${CYAN}Gestor / PM:${RESET} Bacusp v3.5 (Native)"
+        ;;
     termux)
         echo "${VERDE}   ___                        ${RESET} 👤 ${CYAN}Usuario / User:${RESET}$USUARIO"
         echo "${VERDE}  /   \\ ${RESET} 📱 ${CYAN}Sistema / OS:${RESET} Termux (Android)"
