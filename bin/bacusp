@@ -1,6 +1,6 @@
 #!/bin/sh
 # ======================================================
-#  BACUSP v3.9 - Gestor Universal Unificado 🐢🌍🧙‍♂️
+#  BACUSP v3.5 Pro - Gestor Universal Unificado 🐢🌍🧙‍♂️
 # ======================================================
 
 ACCION=$1
@@ -142,6 +142,39 @@ case "$ACCION" in
         fi
         ;;
 
+    upgrade|self-update)
+        echo "🔄 Sincronizando Bacusp con el repositorio remoto..."
+        RUTA_ACTUAL=$(pwd)
+        REPO_DIR=""
+        
+        if [ -d "$HOME/Documents/bacus-pkg/.git" ]; then
+            REPO_DIR="$HOME/Documents/bacus-pkg"
+        elif [ -d "$HOME/Documents/bacus-pkg.git/.git" ]; then
+            REPO_DIR="$HOME/Documents/bacus-pkg.git"
+        fi
+
+        if [ -n "$REPO_DIR" ]; then
+            cd "$REPO_DIR" || exit
+            if command -v lg2 >/dev/null 2>&1; then
+                lg2 pull
+            else
+                git pull origin main
+            fi
+            
+            if [ -f "bin/bacusp" ]; then
+                cp bin/bacusp ~/Documents/bacusp
+                chmod +x ~/Documents/bacusp
+                cd "$RUTA_ACTUAL" || exit
+                echo "✨ ¡Bacusp se ha actualizado correctamente en el sistema a v3.5 Pro!"
+            else
+                echo "❌ Error: No se encontró el binario en la ruta del repositorio."
+                cd "$RUTA_ACTUAL" || exit
+            fi
+        else
+            echo "❌ No se encontró la carpeta del repositorio Git local."
+        fi
+        ;;
+
     modo)
         if [ "$PAQUETE" = "apple" ] && [ "$MODO_EXTRA" = "yes" ]; then
             echo "🍎 [Bacus Sandbox Real] Inicializando aislamiento estricto de Kernel..."
@@ -186,10 +219,11 @@ case "$ACCION" in
         echo "  • doctor           Diagnóstico del gestor"
         echo "  • history          Muestra el historial de comandos"
         echo "  • limpiar          Ejecuta limpieza profunda de caché"
+        echo "  • upgrade          Actualiza Bacusp a la última versión desde GitHub"
         echo "  • modo apple yes   Activa el Sandbox Real de Kernel"
         ;;
 
     *)
         echo "❌ Comando desconocido: '$ACCION'. Escribí 'bacusp help' para ver la ayuda."
         ;;
-es:
+esac
