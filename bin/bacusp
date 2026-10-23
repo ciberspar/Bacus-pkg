@@ -1,15 +1,15 @@
 #!/bin/sh
 #
-# BACUSP v6.1 - Modular Package Manager Frontend
+# BACUSP v6.2 - Modular Package Manager Frontend
 # Project: Bacus-Pkg
 # Author: ciberspar
 # Target: ChiquiOS / POSIX-compatible environments
 #
 # BACUSP is the main CLI dispatcher for Bacus-Pkg.
-# Modules are internal components, not alternative entry points.
+# Modules are internal components managed by this frontend.
 #
 set -u
-VERSION="6.1"
+VERSION="6.2"
 APP="BACUSP"
 # ---------- Colors ----------
 if [ -t 1 ]; then
@@ -174,10 +174,10 @@ mostrar_sistema() {
         printf '%s\n' "Bacus-Pkg executable: not detected"
     fi
 }
-# ---------- Complete help ----------
+# ---------- Help ----------
 mostrar_ayuda() {
     cat <<'EOF'
-BACUSP v6.1 - Bacus-Pkg Command Frontend
+BACUSP v6.2 - Bacus-Pkg Command Frontend
 ========================================
 USAGE / USO
   bacusp COMMAND [ARGS...]
@@ -187,26 +187,29 @@ PACKAGE MANAGEMENT / GESTION DE PAQUETES
   remove, borrar, desinstalar, rm PACKAGE
       Remove a package / Desinstalar un paquete
   purge, purgar PACKAGE
-      Remove package and its configuration / Eliminar paquete y configuracion
+      Remove package and configuration / Eliminar paquete y configuracion
   list, listar, ls
       List installed packages / Listar paquetes instalados
   search, buscar, s QUERY
-      Search available packages / Buscar paquetes
+      Search packages / Buscar paquetes
   info, informacion, detalles PACKAGE
-      Show package details / Mostrar detalles de un paquete
+      Show package information / Mostrar informacion del paquete
   deps, dependencias, depend PACKAGE
       Inspect dependencies / Consultar dependencias
   repo, repositorio, repos
       Manage repositories / Gestionar repositorios
   upgrade, actualizar, up
-      Request a verified package upgrade / Solicitar actualizacion de paquetes
-BACUS-PKG ITSELF / EL PROPIO BACUS-PKG
+      Request a package upgrade / Solicitar actualizacion de paquetes
+BACUS-PKG / GESTION DEL PROPIO BACUS-PKG
   update, actualizar-bacus, self-update
       Update Bacus-Pkg itself / Actualizar el propio Bacus-Pkg
   version, version-bacus, --version, -V
       Show version and platform / Mostrar version y plataforma
-  convert, convertir, conv SOURCE DEST
-      Convert a supported package / Convertir un paquete compatible
+PACKAGE CONVERSION / CONVERSION DE PAQUETES
+  convert, convertir, conv SOURCE DEST.bp
+      Build a BP archive from a source / Crear un archivo BP desde un origen
+  bridge, puente SOURCE [PLATFORM]
+      Analyze source compatibility / Analizar compatibilidad del origen
   verify, verificar, check PACKAGE
       Verify a package / Verificar un paquete
 SYSTEM AND DIAGNOSTICS / SISTEMA Y DIAGNOSTICO
@@ -218,7 +221,7 @@ SYSTEM AND DIAGNOSTICS / SISTEMA Y DIAGNOSTICO
       Audit installed package records / Auditar registros de paquetes
 MAINTENANCE / MANTENIMIENTO
   clean, limpiar, cleanup
-      Clean BACUSP temporary cache / Limpiar cache temporal de BACUSP
+      Clean temporary BACUSP cache / Limpiar cache temporal de BACUSP
   backup, respaldo, copia
       Create a backup / Crear una copia de seguridad
   export, exportar
@@ -226,29 +229,29 @@ MAINTENANCE / MANTENIMIENTO
   optimize, optimizar
       Run the optimization module / Ejecutar el modulo de optimizacion
 NETWORK AND COMMUNITY / RED Y COMUNIDAD
-  bridge, puente
-      Run the remote build bridge / Ejecutar el puente de compilacion remota
   friends, amigos
       Manage community repositories / Gestionar repositorios de la comunidad
   speedtest, velocidad, test-red
-      Test network request speed / Medir la velocidad de una solicitud de red
+      Test network request speed / Medir velocidad de una solicitud de red
 INTERFACE AND SHORTCUTS / INTERFAZ Y ATAJOS
   gui, tui, store, tienda, tienda-gui
-      Open the available package interface / Abrir la interfaz disponible
+      Open the available package interface / Abrir la interfaz de paquetes
   aliases, alias, atajos
       Manage command aliases / Gestionar alias de comandos
 HELP / AYUDA
   help, ayuda, h, -h, --help
-      Show this help / Mostrar esta ayuda
-SAFETY
-  BACUSP does not automatically invoke native package managers.
-  Missing modules and adapters are reported as errors.
+      Show all commands / Mostrar todos los comandos
+SAFETY / SEGURIDAD
+  Native package managers are never automatic fallbacks.
+  Los gestores nativos nunca se usan como alternativa automatica.
   Package conversion does not guarantee cross-platform compatibility.
-  Verify package authenticity before installing or executing its contents.
-ENVIRONMENT VARIABLES
-  BACUSP_HOME        BACUSP data directory
-  BACUSP_MODULE_DIR  Directory containing module scripts
-  BACUSPKG_BIN       Explicit path to Bacus-Pkg executable
+  Convertir un paquete no garantiza compatibilidad multiplataforma.
+  Bridge analyzes compatibility; it does not promise automatic translation.
+  Bridge analiza compatibilidad; no garantiza traduccion automatica.
+ENVIRONMENT / VARIABLES DE ENTORNO
+  BACUSP_HOME        BACUSP data directory / Directorio de datos
+  BACUSP_MODULE_DIR  Directory containing modules / Directorio de modulos
+  BACUSPKG_BIN       Explicit engine path / Ruta explicita al motor
 EOF
 }
 # ---------- Command routing ----------
@@ -301,6 +304,9 @@ case "$ACCION" in
     convert|convertir|conv)
         ejecutar_modulo convert "$@"
         ;;
+    bridge|puente)
+        ejecutar_modulo bridge "$@"
+        ;;
     verify|verificar|check)
         ejecutar_modulo verify "$@"
         ;;
@@ -321,9 +327,6 @@ case "$ACCION" in
         ;;
     optimize|optimizar)
         ejecutar_modulo optimize "$@"
-        ;;
-    bridge|puente)
-        ejecutar_modulo bridge "$@"
         ;;
     friends|amigos)
         ejecutar_modulo friends "$@"
