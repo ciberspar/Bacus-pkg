@@ -1,52 +1,96 @@
 #!/bin/sh
-# ======================================================
-#  BACUSP v3.5 Pro - Módulo Bridge / Motor de Traducción 🌉🐢
-# ======================================================
-
-PAQUETE_TARGET=$1
-ENTORNO_ACTUAL=$2
-
-echo "🌉 [Bridge Engine] Analizando compatibilidad para: '$PAQUETE_TARGET'..."
-
-# 1. Determinar si el paquete es un script puro (Python, Bash) o código fuente
-analizar_y_traducir() {
-    echo "🔍 Inspeccionando la naturaleza del paquete en el repositorio de Linux..."
-    
-    # Simulamos la descarga o lectura de la receta del paquete
-    # Aquí es donde tu motor decidirá el tratamiento:
-    
-    case "$ENTORNO_ACTUAL" in
-        haiku)
-            echo "🍃 [Haiku Bridge] Adaptando fuentes para compilar con herramientas nativas (gcc/make)..."
-            # Lógica para invocar herramientas de compilación adaptadas a BeOS/Haiku
-            echo "⚙️ Ejecutando configuración para Haiku..."
+# BACUSP Bridge - Compatibility Analyzer
+# Internal module managed by bin/bacusp
+set -u
+PAQUETE_TARGET=${1:-}
+ENTORNO_ACTUAL=${2:-unknown}
+error() {
+    printf 'ERROR: %s\n' "$*" >&2
+}
+if [ -z "$PAQUETE_TARGET" ]; then
+    error "Usage: bacusp bridge PACKAGE [PLATFORM]"
+    exit 2
+fi
+if [ ! -e "$PAQUETE_TARGET" ]; then
+    error "Package or source path not found: $PAQUETE_TARGET"
+    exit 2
+fi
+case "$ENTORNO_ACTUAL" in
+    debian|ubuntu|arch|fedora|opensuse|alpine|linux-unknown|linux)
+        FAMILIA=linux ;;
+    darwin|macos)
+        FAMILIA=macos ;;
+    freebsd|openbsd|netbsd|bsd)
+        FAMILIA=bsd ;;
+    haiku)
+        FAMILIA=haiku ;;
+    windows|mingw|msys)
+        FAMILIA=windows ;;
+    termux)
+        FAMILIA=termux ;;
+    hurd)
+        FAMILIA=hurd ;;
+    *)
+        FAMILIA=unknown ;;
+esac
+printf '%s\n' "BACUSP Bridge - Compatibility Analysis"
+printf 'Input: %s\n' "$PAQUETE_TARGET"
+printf 'Target: %s (%s)\n' "$ENTORNO_ACTUAL" "$FAMILIA"
+if [ -d "$PAQUETE_TARGET" ]; then
+    TIPO=source-directory
+elif command -v file >/dev/null 2>&1; then
+    DESCRIPCION=$(file -b "$PAQUETE_TARGET" 2>/dev/null || printf unknown)
+    printf 'Detected file type: %s\n' "$DESCRIPCION"
+    case "$DESCRIPCION" in
+        *ELF*)
+            TIPO=native-binary
             ;;
-        bsd)
-            echo "😈 [BSD Bridge] Redirigiendo dependencias de glibc a librerías compatibles con BSD..."
-            # Ajustes de POSIX para FreeBSD/OpenBSD
+        *PE32*|*MS-DOS*executable*)
+            TIPO=windows-binary
             ;;
-        windows)
-            echo "🪟 [Windows Bridge] Evitando WSL: Buscando binario portable o empaquetando script..."
-            # Si es un script de Python/Bash, verifica si hay intérprete portable o usa equivalente .exe
-            if command -v python >/dev/null 2>&1; then
-                echo "🐍 Ejecutando lógica compatible mediante intérprete local en Windows."
-            else
-                echo "⚠️ Se requiere un entorno de ejecución compatible (como MSYS2 o Python portable)."
-            fi
-            ;;
-        ios)
-            echo "📱 [iOS Bridge] Desplegando en el sandbox de a-shell..."
+        *script*|*text*)
+            TIPO=script-or-source
             ;;
         *)
-            echo "🐧 [Linux Native] El paquete es 100% compatible de forma nativa."
+            TIPO=unknown
             ;;
-    }
-}
-
-# Ejecutar el proceso de puente
-if [ -z "$PAQUETE_TARGET" ]; then
-    echo "❌ Error: Especificá un paquete para aplicar el puente mágico."
-    exit 1
+    esac
+else
+    TIPO=unknown
 fi
-
-analizar_y_traducir
+printf 'Classification: %s\n' "$TIPO"
+printf '%s\n' "Available build tools:"
+for tool in cc gcc clang make cmake meson python3; do
+    if command -v "$tool" >/dev/null 2>&1; then
+        printf '  available: %s\n' "$tool"
+    else
+        printf '  missing:   %s\n' "$tool"
+    fi
+done
+case "$TIPO:$FAMILIA" in
+    native-binary:windows|native-binary:haiku|native-binary:bsd|native-binary:macos)
+        printf '%s\n' \
+            "Status: native binary compatibility is NOT established."
+        printf '%s\n' \
+            "A compatible build or verified runtime is required."
+        exit 3
+        ;;
+    windows-binary:linux|windows-binary:bsd|windows-binary:haiku)
+        printf '%s\n' \
+            "Status: Windows binary detected; native compatibility is not established."
+        exit 3
+        ;;
+    source-directory:*)
+        printf '%s\n' \
+            "Status: source directory detected; build configuration must be inspected."
+        ;;
+    script-or-source:*)
+        printf '%s\n' \
+            "Status: inspect interpreter, dependencies and platform-specific commands."
+        ;;
+    *)
+        printf '%s\n' \
+            "Status: insufficient information to confirm compatibility."
+        ;;
+esac
+exit 0
