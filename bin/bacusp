@@ -1,296 +1,402 @@
+
 #!/bin/sh
-# ======================================================================
-#  BACUSP v5.1 Dual-Lang Pure Standalone Engine 🐢⚙️
-#  Creador: ciberspar
-#  Filosofía: Bilingüe (ES/EN), Autónomo, Portable y Modular
-# ======================================================================
+#
+# BACUSP v6.0 - Modular Package Manager Frontend
+# Project: Bacus-Pkg
+# Author: ciberspar
+# Target: ChiquiOS / POSIX-compatible environments
+#
+# BACUSP is the CLI frontend. Package operations must be
+# implemented by Bacus-Pkg or a verified platform adapter.
+#
 
-# --- COLORES ANSI ---
-VERDE='\033[1;32m'
-AZUL='\033[1;34m'
-CYAN='\033[1;36m'
-ROJO='\033[1;31m'
-MAGENTA='\033[1;35m'
-AMARILLO='\033[1;33m'
-RESET='\033[0m'
+set -u
 
-# --- RUTAS DE CONTROL INTERNO DE BACUSP ---
-BACUSP_HOME="$HOME/.bacusp"
-DB_FILE="$BACUSP_HOME/installed.db"
+VERSION="6.0"
+APP="BACUSP"
+
+# ---------- Colors ----------
+if [ -t 1 ]; then
+    VERDE=$(printf '\033[0;32m')
+    AZUL=$(printf '\033[0;34m')
+    CYAN=$(printf '\033[0;36m')
+    ROJO=$(printf '\033[0;31m')
+    AMARILLO=$(printf '\033[0;33m')
+    RESET=$(printf '\033[0m')
+else
+    VERDE=""
+    AZUL=""
+    CYAN=""
+    ROJO=""
+    AMARILLO=""
+    RESET=""
+fi
+
+# ---------- Paths ----------
+BACUSP_HOME="${BACUSP_HOME:-${HOME:-/tmp}/.bacusp}"
 CACHE_DIR="$BACUSP_HOME/cache"
 LOG_FILE="$BACUSP_HOME/bacusp.log"
-INSTALL_DIR="/usr/local/bin"
+DB_FILE="$BACUSP_HOME/installed.db"
 
-# Si no hay permisos para /usr/local/bin (ej: a-shell o sin root), usar ~/bin
-[ ! -w "/usr/local/bin" 2>/dev/null ] && INSTALL_DIR="$HOME/bin"
-
-mkdir -p "$BACUSP_HOME" "$CACHE_DIR" "$INSTALL_DIR" 2>/dev/null
-
-log_msg() {
-    TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
-    echo "[$TIMESTAMP] $1" >> "$LOG_FILE"
+SCRIPT_DIR=$(
+    CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null &&
+    pwd -P
+) || {
+    printf '%s\n' "BACUSP: cannot determine script directory." >&2
+    exit 1
 }
 
-# --- 1. DETECCIÓN DE ENTORNO ---
+MODULE_DIR="${BACUSP_MODULE_DIR:-$SCRIPT_DIR/../modules}"
+
+mkdir -p "$BACUSP_HOME" "$CACHE_DIR" || {
+    printf '%s\n' "BACUSP: cannot create its data directory." >&2
+    exit 1
+}
+
+# ---------- Logging ----------
+log_msg() {
+    printf '%s [%s] %s\n' \
+        "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || printf unknown)" \
+        "$APP" "$*" >> "$LOG_FILE" 2>/dev/null || :
+}
+
+info() {
+    printf '%s%s%s\n' "$CYAN" "$*" "$RESET"
+}
+
+success() {
+    printf '%s%s%s\n' "$VERDE" "$*" "$RESET"
+}
+
+warn() {
+    printf '%s%s%s\n' "$AMARILLO" "$*" "$RESET" >&2
+}
+
+error() {
+    printf '%s%s%s\n' "$ROJO" "$*" "$RESET" >&2
+}
+
+# ---------- Platform detection ----------
 detectar_entorno() {
-    if uname -r 2>/dev/null | grep -qi "hurd"; then
-        echo "hurd"
-    elif [ -d "/net" ] && uname -s 2>/dev/null | grep -qi "Plan9"; then
-        echo "plan9"
-    elif [ -d "/data/data/com.termux" ]; then
-        echo "termux"
-    elif command -v termux-info >/dev/null 2>&1; then
-        echo "termux"
-    elif [ -n "$LIBPATH" ] || uname -s 2>/dev/null | grep -qi "Darwin" || [ -d "/Documents" ]; then
-        echo "ios"
-    elif [ -n "$WINDIR" ] || [ -d "/C/Windows" ]; then
-        echo "windows"
-    elif command -v pkgman >/dev/null 2>&1; then
-        echo "haiku"
-    elif uname -s 2>/dev/null | grep -qi "SunOS"; then
-        echo "solaris"
-    elif [ -d "/kolibrios" ] || uname -m 2>/dev/null | grep -qi "kolibri"; then
-        echo "kolibrios"
-    elif [ -f "/etc/debian_version" ]; then
-        echo "debian"
-    elif [ -f "/etc/SuSE-release" ] || ([ -f /etc/os-release ] && grep -qi "suse" /etc/os-release); then
-        echo "opensuse"
-    elif [ -f "/etc/arch-release" ]; then
-        echo "arch"
-    else
-        echo "universal-posix"
-    fi
+    OS_NAME=$(uname -s 2>/dev/null || printf unknown)
+    OS_ARCH=$(uname -m 2>/dev/null || printf unknown)
+
+    case "$OS_NAME" in
+        Linux)
+            if [ -r /etc/os-release ]; then
+                # shellcheck disable=SC1091
+                . /etc/os-release
+                case "${ID:-}" in
+                    debian)
+                        printf 'debian'
+                        return
+                        ;;
+                    ubuntu)
+                        printf 'ubuntu'
+                        return
+                        ;;
+                    arch)
+                        printf 'arch'
+                        return
+                        ;;
+                    fedora)
+                        printf 'fedora'
+                        return
+                        ;;
+                    opensuse*|opensuse)
+                        printf 'opensuse'
+                        return
+                        ;;
+                    alpine)
+                        printf 'alpine'
+                        return
+                        ;;
+                esac
+            fi
+            printf 'linux-unknown'
+            ;;
+        Darwin)
+            printf 'darwin'
+            ;;
+        FreeBSD)
+            printf 'freebsd'
+            ;;
+        OpenBSD)
+            printf 'openbsd'
+            ;;
+        NetBSD)
+            printf 'netbsd'
+            ;;
+        GNU)
+            printf 'hurd'
+            ;;
+        Haiku)
+            printf 'haiku'
+            ;;
+        *)
+            if [ -n "${TERMUX_VERSION:-}" ]; then
+                printf 'termux'
+            else
+                printf 'posix-unknown'
+            fi
+            ;;
+    esac
 }
 
 ENTORNO=$(detectar_entorno)
-ACCION=$1
-PAQUETE=$2
+ACCION=${1:-help}
 
-# --- 2. MOTOR DE INSTALACIÓN AUTÓNOMO ---
-instalar_autonomo() {
-    PAQ=$1
-    echo "${CYAN}🌀 [Bacusp Pure Engine] Buscando y preparando '$PAQ' para [$ENTORNO]...${RESET}"
-    log_msg "Solicitud de instalación autónoma: $PAQ en $ENTORNO"
+# ---------- Bacus-Pkg engine ----------
+# Optional explicit path to the Bacus-Pkg executable.
+# No guessed command is executed if the engine is missing.
+BACUSPKG_BIN="${BACUSPKG_BIN:-}"
 
-    if [ "$ENTORNO" = "kolibrios" ]; then
-        echo "${AMARILLO}🪶 [Kolibri Mode] Verificando reglas de bajo consumo para '$PAQ'...${RESET}"
+encontrar_motor() {
+    if [ -n "$BACUSPKG_BIN" ] && [ -x "$BACUSPKG_BIN" ]; then
+        printf '%s\n' "$BACUSPKG_BIN"
+        return 0
     fi
 
-    URL_REPO=$(curl -s "https://api.github.com/search/repositories?q=$PAQ" | grep '"clone_url":' | head -n 1 | awk -F'"' '{print $4}')
-
-    if [ -n "$URL_REPO" ]; then
-        echo "${VERDE}📥 Clonando repositorio oficial: $URL_REPO${RESET}"
-        DIR_TEMP="$CACHE_DIR/build_$PAQ"
-        rm -rf "$DIR_TEMP"
-        git clone --depth 1 "$URL_REPO" "$DIR_TEMP"
-
-        if [ -d "$DIR_TEMP" ]; then
-            cd "$DIR_TEMP" || exit
-            BIN_PATH="$INSTALL_DIR/$PAQ"
-
-            echo "${CYAN}⚙️ Compilando nativamente en '$ENTORNO'...${RESET}"
-            if [ -f "configure" ]; then
-                ./configure --prefix="$BACUSP_HOME" && make && make install
-            elif [ -f "Makefile" ] || [ -f "makefile" ]; then
-                make && cp "$PAQ" "$BIN_PATH" 2>/dev/null || make install
-            elif [ -f "CMakeLists.txt" ]; then
-                mkdir -p build && cd build && cmake .. && make && cp "$PAQ" "$BIN_PATH" 2>/dev/null
-            elif [ -f "setup.py" ]; then
-                python3 setup.py install --user
-            else
-                if [ -f "$PAQ" ]; then
-                    cp "$PAQ" "$INSTALL_DIR/"
-                    chmod +x "$INSTALL_DIR/$PAQ"
-                fi
-            fi
-
-            echo "$PAQ|$INSTALL_DIR/$PAQ|$(date "+%Y-%m-%d")" >> "$DB_FILE"
-            echo "${VERDE}✨ ¡Instalación autónoma exitosa para '$PAQ'!${RESET}"
-            log_msg "Instalado con éxito: $PAQ en $INSTALL_DIR/$PAQ"
+    for candidate in \
+        "$SCRIPT_DIR/bacus-pkg" \
+        "$SCRIPT_DIR/bacuspkg" \
+        "$SCRIPT_DIR/../bacus-pkg/bin/bacus-pkg"
+    do
+        if [ -x "$candidate" ] && [ ! -d "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
         fi
+    done
+
+    command -v bacus-pkg 2>/dev/null && return 0
+    return 1
+}
+
+# This deliberately does not guess Bacus-Pkg's CLI syntax.
+# Connect each operation after confirming the engine's real interface.
+motor_no_conectado() {
+    error "Bacus-Pkg engine is not configured for this operation."
+    warn "Detected platform: $ENTORNO"
+    warn "No native package manager was invoked as a fallback."
+    warn "Configure the verified Bacus-Pkg adapter before continuing."
+    log_msg "Engine unavailable: action=$ACCION platform=$ENTORNO"
+    return 2
+}
+
+# ---------- Module dispatcher ----------
+ejecutar_modulo() {
+    modulo=$1
+    shift
+
+    archivo="$MODULE_DIR/$modulo.sh"
+
+    if [ ! -f "$archivo" ]; then
+        error "Module not found: $archivo"
+        log_msg "Missing module: $modulo"
+        return 2
+    fi
+
+    if [ ! -r "$archivo" ]; then
+        error "Module is not readable: $archivo"
+        return 2
+    fi
+
+    log_msg "Running module=$modulo platform=$ENTORNO"
+
+    # Modules receive the original remaining arguments.
+    # They must validate arguments and report their real exit status.
+    sh "$archivo" "$@"
+    resultado=$?
+
+    if [ "$resultado" -ne 0 ]; then
+        log_msg "Module failed: $modulo exit=$resultado"
+    fi
+
+    return "$resultado"
+}
+
+# ---------- System information ----------
+mostrar_sistema() {
+    printf '%s\n' "BACUSP v$VERSION"
+    printf 'Platform: %s\n' "$ENTORNO"
+    printf 'Architecture: %s\n' \
+        "$(uname -m 2>/dev/null || printf unknown)"
+    printf 'Kernel: %s\n' \
+        "$(uname -r 2>/dev/null || printf unknown)"
+    printf 'Module directory: %s\n' "$MODULE_DIR"
+
+    if motor=$(encontrar_motor); then
+        printf 'Bacus-Pkg executable: %s\n' "$motor"
     else
-        echo "${ROJO}❌ No se encontró el paquete '$PAQ' en el registro autónomo de Bacusp.${RESET}"
-        log_msg "Fallo al encontrar paquete: $PAQ"
+        printf '%s\n' "Bacus-Pkg executable: not detected"
     fi
 }
 
-# --- 3. MOTOR DE DESINSTALACIÓN AUTÓNOMO ---
-desinstalar_autonomo() {
-    PAQ=$1
-    echo "${ROJO}🗑️ [Bacusp Pure Engine] Desinstalando '$PAQ'...${RESET}"
-    
-    if [ -f "$DB_FILE" ]; then
-        REGISTRO=$(grep "^$PAQ|" "$DB_FILE")
-        if [ -n "$REGISTRO" ]; then
-            RUTA_BIN=$(echo "$REGISTRO" | awk -F'|' '{print $2}')
-            if [ -f "$RUTA_BIN" ]; then
-                rm -f "$RUTA_BIN"
-                echo "${VERDE}✅ Archivo binario eliminado: $RUTA_BIN${RESET}"
-            fi
-            grep -v "^$PAQ|" "$DB_FILE" > "$DB_FILE.tmp" && mv "$DB_FILE.tmp" "$DB_FILE"
-            echo "${VERDE}✨ '$PAQ' eliminado correctamente de Bacusp.${RESET}"
-            log_msg "Desinstalado: $PAQ"
-        else
-            echo "${AMARILLO}⚠️ El paquete '$PAQ' no figura en el registro interno.${RESET}"
-        fi
-    else
-        echo "${ROJO}❌ No hay base de datos de paquetes instalados.${RESET}"
-    fi
-}
-
-# --- 4. AYUDA BILINGÜE / DUAL-LANGUAGE HELP ---
+# ---------- Help ----------
 mostrar_ayuda() {
-    echo ""
-    echo "${CYAN}======================================================${RESET}"
-    echo "${VERDE}  🐢 BACUSP v5.1 Pure Standalone Engine${RESET}"
-    echo "${CYAN}======================================================${RESET}"
-    echo "  Comandos principales / Main Commands:"
-    echo "    install / instalar <paq>  - Compila e instala / Build & install"
-    echo "    remove / borrar <paq>     - Elimina un paquete / Uninstall package"
-    echo "    purge / purgar <paq>      - Elimina paquete y config / Deep purge"
-    echo "    list / listar / ls        - Muestra instalados / Show installed pkgs"
-    echo "    search / buscar <paq>     - Busca paquetes en GitHub / Search pkgs"
-    echo "    gui / tui / tienda-gui    - Tienda interactiva TUI / Interactive TUI Store"
-    echo ""
-    echo "  Módulos de Sistema & Repositorios / System Modules:"
-    echo "    upgrade / actualizar      - Actualiza núcleo y SO / Update core & OS"
-    echo "    deps / dependencias <paq> - Revisa dependencias / Check dependencies"
-    echo "    repo / repositorio        - Gestiona repositorios / Manage repos"
-    echo "    friends / amigos          - Red de repos y devs amigos / Friends network"
-    echo "    audit / auditar           - Auditoría de seguridad / Security audit"
-    echo "    optimize / optimizar      - Reduce peso de binarios / Compress binaries"
-    echo "    doctor / salud            - Diagnóstico del sistema / System check"
-    echo "    speedtest / velocidad     - Mide latencia de espejos / Test mirror latency"
-    echo "    export / exportar         - Exporta entorno tar.gz / Backup env"
-    echo "    backup / respaldar        - Copias de seguridad / System backups"
-    echo "    bridge / puente           - Compilación remota GitHub / Remote bridge"
-    echo "    fetch / sysinfo           - Muestra specs y ASCII / Show specs & ASCII"
-    echo "    info                      - Diagnóstico profundo / Deep diagnostics"
-    echo "    clean / limpiar           - Limpia caché / Clear temporary cache"
-    echo "    nuke-native / destruir    - Elimina gestor del SO / Remove native PM"
-    echo "    help / ayuda              - Muestra esta guía / Display this guide"
-    echo ""
-    echo "  Entorno detectado / OS: ${AMARILLO}$ENTORNO${RESET}"
-    echo "  Base de datos / Local DB: ${CYAN}$DB_FILE${RESET}"
-    echo "${CYAN}======================================================${RESET}"
-    echo ""
+    cat <<'EOF'
+BACUSP v6.0 - Bacus-Pkg command frontend
+
+Usage:
+  bacusp COMMAND [ARGS...]
+
+Package commands:
+  install, instalar, i       Install a package
+  remove, borrar, rm        Remove a package
+  purge, purgar              Purge a package
+  list, listar, ls           List installed packages
+  search, buscar, s          Search packages
+  info                       Show package details
+  deps, dependencias         Inspect dependencies
+  repo, repositorio          Manage repositories
+  upgrade, actualizar, u     Request a system/package upgrade
+
+System and maintenance:
+  doctor, salud              Diagnose installation
+  audit, auditar              Security audit
+  clean, limpiar              Clean temporary cache
+  backup                      Backup
+  export, exportar             Export environment
+  optimize, optimizar          Optimization module
+  fetch, sysinfo               System information
+  bridge                       Remote build bridge
+  friends, amigos              Community repositories
+  aliases, alias               Manage aliases
+  gui, tui, store              Package interface
+  speedtest, velocidad         Network speed test
+  help, ayuda, h               Show this help
+  version                      Show version and platform
+
+Environment:
+  BACUSP_HOME       BACUSP data directory
+  BACUSP_MODULE_DIR Directory containing module scripts
+  BACUSPKG_BIN      Explicit path to Bacus-Pkg executable
+
+Safety:
+  System upgrades require a verified engine and platform adapter.
+  BACUSP never reports an upgrade as successful when it has not run.
+  Missing adapters are errors, not permission to guess another backend.
+EOF
 }
 
-# --- 5. ENRUTADOR PRINCIPAL MODULAR ---
+# ---------- Command routing ----------
 case "$ACCION" in
+    help|ayuda|-h|--help|h)
+        mostrar_ayuda
+        ;;
+
+    version|--version|-V)
+        mostrar_sistema
+        ;;
+
+    system|sistema|fetch|sysinfo)
+        if [ -f "$MODULE_DIR/fetch.sh" ]; then
+            ejecutar_modulo fetch "$@"
+        else
+            mostrar_sistema
+        fi
+        ;;
+
     install|instalar|i)
-        [ -z "$PAQUETE" ] && { echo "${ROJO}❌ Error: Especificá un paquete / Specify a package.${RESET}"; exit 1; }
-        instalar_autonomo "$PAQUETE"
+        ejecutar_modulo install "$@"
         ;;
 
     remove|borrar|rm|desinstalar)
-        [ -z "$PAQUETE" ] && { echo "${ROJO}❌ Error: Especificá un paquete / Specify a package.${RESET}"; exit 1; }
-        desinstalar_autonomo "$PAQUETE"
+        ejecutar_modulo remove "$@"
         ;;
 
     purge|purgar)
-        [ -z "$PAQUETE" ] && { echo "${ROJO}❌ Error: Especificá un paquete.${RESET}"; exit 1; }
-        [ -f "$(dirname "$0")/../modules/purge.sh" ] && sh "$(dirname "$0")/../modules/purge.sh" "$PAQUETE"
+        ejecutar_modulo purge "$@"
         ;;
 
     list|listar|ls)
-        echo "${CYAN}📦 Paquetes gestionados por Bacusp Pure Engine:${RESET}"
-        if [ -f "$DB_FILE" ]; then
-            awk -F'|' '{print "  - " $1 " (Ruta: " $2 " | Fecha: " $3 ")"}' "$DB_FILE"
-        else
-            echo "  (No hay paquetes instalados todavía / No packages installed yet)"
-        fi
+        ejecutar_modulo list "$@"
         ;;
 
     search|buscar|s)
-        [ -z "$PAQUETE" ] && { echo "${ROJO}❌ Error: Especificá un término de búsqueda.${RESET}"; exit 1; }
-        if [ -f "$(dirname "$0")/../modules/search.sh" ]; then
-            sh "$(dirname "$0")/../modules/search.sh" "$PAQUETE"
-        else
-            echo "${AMARILLO}⚠️ Módulo search.sh no encontrado en modules/.${RESET}"
-        fi
+        ejecutar_modulo search "$@"
         ;;
 
-    gui|tui|tienda-gui|store)
-        if [ -f "$(dirname "$0")/../modules/store_gui.sh" ]; then
-            sh "$(dirname "$0")/../modules/store_gui.sh"
-        else
-            echo "${AMARILLO}⚠️ Módulo store_gui.sh no encontrado en modules/.${RESET}"
-        fi
-        ;;
-
-    upgrade|actualizar|u)
-        if [ -f "$(dirname "$0")/../modules/upgrade.sh" ]; then
-            sh "$(dirname "$0")/../modules/upgrade.sh"
-        else
-            echo "${AMARILLO}⚠️ Módulo upgrade.sh no encontrado en carpeta modules/.${RESET}"
-        fi
+    info)
+        ejecutar_modulo info "$@"
         ;;
 
     deps|dependencias)
-        [ -z "$PAQUETE" ] && { echo "${ROJO}❌ Error: Especificá un paquete.${RESET}"; exit 1; }
-        [ -f "$(dirname "$0")/../modules/deps.sh" ] && sh "$(dirname "$0")/../modules/deps.sh" "$PAQUETE"
+        ejecutar_modulo deps "$@"
         ;;
 
     repo|repositorio)
-        [ -f "$(dirname "$0")/../modules/repo.sh" ] && sh "$(dirname "$0")/../modules/repo.sh" "$PAQUETE" "$3"
+        ejecutar_modulo repo "$@"
         ;;
 
-    friends|amigos)
-        if [ -f "$(dirname "$0")/../modules/friends.sh" ]; then
-            sh "$(dirname "$0")/../modules/friends.sh" "$2" "$3"
-        else
-            echo "${AMARILLO}⚠️ Módulo friends.sh no encontrado en modules/.${RESET}"
-        fi
-        ;;
-
-    audit|auditar)
-        [ -f "$(dirname "$0")/../modules/audit.sh" ] && sh "$(dirname "$0")/../modules/audit.sh" || echo "${AMARILLO}⚠️ Módulo audit.sh no encontrado.${RESET}"
-        ;;
-
-    optimize|optimizar)
-        [ -f "$(dirname "$0")/../modules/optimize.sh" ] && sh "$(dirname "$0")/../modules/optimize.sh" || echo "${AMARILLO}⚠️ Módulo optimize.sh no encontrado.${RESET}"
+    upgrade|actualizar|u)
+        ejecutar_modulo upgrade "$@"
         ;;
 
     doctor|salud)
-        [ -f "$(dirname "$0")/../modules/doctor.sh" ] && sh "$(dirname "$0")/../modules/doctor.sh"
+        ejecutar_modulo doctor "$@"
         ;;
 
-    speedtest|velocidad)
-        if [ -f "$(dirname "$0")/../modules/speedtest.sh" ]; then
-            sh "$(dirname "$0")/../modules/speedtest.sh"
-        elif [ -f "$(dirname "$0")/../modules/speedtest.sh.sh" ]; then
-            sh "$(dirname "$0")/../modules/speedtest.sh.sh"
-        else
-            echo "${AMARILLO}⚠️ Módulo speedtest.sh no encontrado.${RESET}"
-        fi
-        ;;
-
-    export|exportar)
-        [ -f "$(dirname "$0")/../modules/export.sh" ] && sh "$(dirname "$0")/../modules/export.sh" || echo "${AMARILLO}⚠️ Módulo export.sh no encontrado.${RESET}"
+    audit|auditar)
+        ejecutar_modulo audit "$@"
         ;;
 
     clean|limpiar)
-        echo "${CYAN}🧹 Limpiando caché y temporales de Bacusp...${RESET}"
-        rm -rf "$CACHE_DIR"/*
-        echo "${VERDE}✅ Caché interna vaciada con éxito / Cache cleared.${RESET}"
+        ejecutar_modulo clean "$@"
         ;;
 
-    fetch|sysinfo)
-        if [ -f "$(dirname "$0")/../modules/sysinfo.sh" ]; then
-            sh "$(dirname "$0")/../modules/sysinfo.sh"
-        elif [ -f "$(dirname "$0")/../modules/fetch.sh" ]; then
-            sh "$(dirname "$0")/../modules/fetch.sh"
+    backup|respaldo)
+        ejecutar_modulo backup "$@"
+        ;;
+
+    export|exportar)
+        ejecutar_modulo export "$@"
+        ;;
+
+    optimize|optimizar)
+        ejecutar_modulo optimize "$@"
+        ;;
+
+    bridge)
+        ejecutar_modulo bridge "$@"
+        ;;
+
+    friends|amigos)
+        ejecutar_modulo friends "$@"
+        ;;
+
+    aliases|alias|atajos)
+        ejecutar_modulo aliases "$@"
+        ;;
+
+    gui|tui|store|tienda-gui)
+        if [ -f "$MODULE_DIR/storegui.sh" ]; then
+            ejecutar_modulo storegui "$@"
+        elif [ -f "$MODULE_DIR/gui.sh" ]; then
+            ejecutar_modulo gui "$@"
         else
-            echo "${VERDE}🐢 Bacusp v5.1 Pure Standalone - Entorno: $ENTORNO${RESET}"
+            error "No package interface module is installed."
+            exit 2
         fi
         ;;
 
-    nuke-native|destruir-nativo|nuke)
-        [ -f "$(dirname "$0")/../modules/nuke.sh" ] && sh "$(dirname "$0")/../modules/nuke.sh" || echo "${AMARILLO}⚠️ Módulo nuke.sh no encontrado.${RESET}"
+    speedtest|velocidad)
+        ejecutar_modulo speedtest "$@"
         ;;
 
-    help|ayuda|h|*)
-        mostrar_ayuda
+    nuke-native|destruir-nativo|nuke)
+        error "This command is disabled in BACUSP v6.0."
+        warn "Removing native package-management components can break the OS."
+        warn "Use a tested migration plan before replacing system package tools."
+        log_msg "Blocked unsafe native package manager removal request"
+        exit 2
+        ;;
+
+    *)
+        error "Unknown command: $ACCION"
+        printf '%s\n' "Run 'bacusp help' to see available commands."
+        exit 2
         ;;
 esac
+
+exit $?
