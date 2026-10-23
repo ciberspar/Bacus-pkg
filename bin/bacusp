@@ -1,20 +1,16 @@
-
 #!/bin/sh
 #
-# BACUSP v6.0 - Modular Package Manager Frontend
+# BACUSP v6.1 - Modular Package Manager Frontend
 # Project: Bacus-Pkg
 # Author: ciberspar
 # Target: ChiquiOS / POSIX-compatible environments
 #
-# BACUSP is the CLI frontend. Package operations must be
-# implemented by Bacus-Pkg or a verified platform adapter.
+# BACUSP is the main CLI dispatcher for Bacus-Pkg.
+# Modules are internal components, not alternative entry points.
 #
-
 set -u
-
-VERSION="6.0"
+VERSION="6.1"
 APP="BACUSP"
-
 # ---------- Colors ----------
 if [ -t 1 ]; then
     VERDE=$(printf '\033[0;32m')
@@ -31,13 +27,11 @@ else
     AMARILLO=""
     RESET=""
 fi
-
 # ---------- Paths ----------
 BACUSP_HOME="${BACUSP_HOME:-${HOME:-/tmp}/.bacusp}"
 CACHE_DIR="$BACUSP_HOME/cache"
 LOG_FILE="$BACUSP_HOME/bacusp.log"
 DB_FILE="$BACUSP_HOME/installed.db"
-
 SCRIPT_DIR=$(
     CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null &&
     pwd -P
@@ -45,94 +39,61 @@ SCRIPT_DIR=$(
     printf '%s\n' "BACUSP: cannot determine script directory." >&2
     exit 1
 }
-
 MODULE_DIR="${BACUSP_MODULE_DIR:-$SCRIPT_DIR/../modules}"
-
 mkdir -p "$BACUSP_HOME" "$CACHE_DIR" || {
     printf '%s\n' "BACUSP: cannot create its data directory." >&2
     exit 1
 }
-
 # ---------- Logging ----------
 log_msg() {
     printf '%s [%s] %s\n' \
         "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || printf unknown)" \
         "$APP" "$*" >> "$LOG_FILE" 2>/dev/null || :
 }
-
 info() {
     printf '%s%s%s\n' "$CYAN" "$*" "$RESET"
 }
-
 success() {
     printf '%s%s%s\n' "$VERDE" "$*" "$RESET"
 }
-
 warn() {
     printf '%s%s%s\n' "$AMARILLO" "$*" "$RESET" >&2
 }
-
 error() {
     printf '%s%s%s\n' "$ROJO" "$*" "$RESET" >&2
 }
-
 # ---------- Platform detection ----------
 detectar_entorno() {
     OS_NAME=$(uname -s 2>/dev/null || printf unknown)
-    OS_ARCH=$(uname -m 2>/dev/null || printf unknown)
-
     case "$OS_NAME" in
         Linux)
             if [ -r /etc/os-release ]; then
+                ID=""
+                ID_LIKE=""
                 # shellcheck disable=SC1091
                 . /etc/os-release
                 case "${ID:-}" in
-                    debian)
-                        printf 'debian'
-                        return
-                        ;;
-                    ubuntu)
-                        printf 'ubuntu'
-                        return
-                        ;;
-                    arch)
-                        printf 'arch'
-                        return
-                        ;;
-                    fedora)
-                        printf 'fedora'
-                        return
-                        ;;
-                    opensuse*|opensuse)
-                        printf 'opensuse'
-                        return
-                        ;;
-                    alpine)
-                        printf 'alpine'
-                        return
-                        ;;
+                    debian)   printf 'debian'; return ;;
+                    ubuntu)   printf 'ubuntu'; return ;;
+                    arch)     printf 'arch'; return ;;
+                    fedora)   printf 'fedora'; return ;;
+                    opensuse*) printf 'opensuse'; return ;;
+                    alpine)   printf 'alpine'; return ;;
+                esac
+                case " ${ID_LIKE:-} " in
+                    *" debian "*) printf 'debian-like'; return ;;
+                    *" arch "*)   printf 'arch-like'; return ;;
+                    *" fedora "*) printf 'fedora-like'; return ;;
                 esac
             fi
             printf 'linux-unknown'
             ;;
-        Darwin)
-            printf 'darwin'
-            ;;
-        FreeBSD)
-            printf 'freebsd'
-            ;;
-        OpenBSD)
-            printf 'openbsd'
-            ;;
-        NetBSD)
-            printf 'netbsd'
-            ;;
-        GNU)
-            printf 'hurd'
-            ;;
-        Haiku)
-            printf 'haiku'
-            ;;
+        Darwin)  printf 'darwin' ;;
+        FreeBSD) printf 'freebsd' ;;
+        OpenBSD) printf 'openbsd' ;;
+        NetBSD)  printf 'netbsd' ;;
+        GNU)     printf 'hurd' ;;
+        Haiku)   printf 'haiku' ;;
         *)
             if [ -n "${TERMUX_VERSION:-}" ]; then
                 printf 'termux'
@@ -142,21 +103,18 @@ detectar_entorno() {
             ;;
     esac
 }
-
 ENTORNO=$(detectar_entorno)
 ACCION=${1:-help}
-
 # ---------- Bacus-Pkg engine ----------
-# Optional explicit path to the Bacus-Pkg executable.
-# No guessed command is executed if the engine is missing.
 BACUSPKG_BIN="${BACUSPKG_BIN:-}"
-
 encontrar_motor() {
-    if [ -n "$BACUSPKG_BIN" ] && [ -x "$BACUSPKG_BIN" ]; then
-        printf '%s\n' "$BACUSPKG_BIN"
-        return 0
+    if [ -n "$BACUSPKG_BIN" ]; then
+        if [ -x "$BACUSPKG_BIN" ] && [ ! -d "$BACUSPKG_BIN" ]; then
+            printf '%s\n' "$BACUSPKG_BIN"
+            return 0
+        fi
+        return 1
     fi
-
     for candidate in \
         "$SCRIPT_DIR/bacus-pkg" \
         "$SCRIPT_DIR/bacuspkg" \
@@ -167,54 +125,39 @@ encontrar_motor() {
             return 0
         fi
     done
-
-    command -v bacus-pkg 2>/dev/null && return 0
-    return 1
+    command -v bacus-pkg 2>/dev/null
 }
-
-# This deliberately does not guess Bacus-Pkg's CLI syntax.
-# Connect each operation after confirming the engine's real interface.
 motor_no_conectado() {
     error "Bacus-Pkg engine is not configured for this operation."
-    warn "Detected platform: $ENTORNO"
-    warn "No native package manager was invoked as a fallback."
-    warn "Configure the verified Bacus-Pkg adapter before continuing."
+    warn "Platform: $ENTORNO"
+    warn "No native package manager was used as a fallback."
+    warn "Configure the verified Bacus-Pkg interface first."
     log_msg "Engine unavailable: action=$ACCION platform=$ENTORNO"
     return 2
 }
-
 # ---------- Module dispatcher ----------
 ejecutar_modulo() {
     modulo=$1
     shift
-
     archivo="$MODULE_DIR/$modulo.sh"
-
     if [ ! -f "$archivo" ]; then
-        error "Module not found: $archivo"
+        error "Module not found: $modulo ($archivo)"
         log_msg "Missing module: $modulo"
         return 2
     fi
-
     if [ ! -r "$archivo" ]; then
-        error "Module is not readable: $archivo"
+        error "Module is not readable: $modulo"
+        log_msg "Unreadable module: $modulo"
         return 2
     fi
-
     log_msg "Running module=$modulo platform=$ENTORNO"
-
-    # Modules receive the original remaining arguments.
-    # They must validate arguments and report their real exit status.
     sh "$archivo" "$@"
     resultado=$?
-
     if [ "$resultado" -ne 0 ]; then
         log_msg "Module failed: $modulo exit=$resultado"
     fi
-
     return "$resultado"
 }
-
 # ---------- System information ----------
 mostrar_sistema() {
     printf '%s\n' "BACUSP v$VERSION"
@@ -224,153 +167,174 @@ mostrar_sistema() {
     printf 'Kernel: %s\n' \
         "$(uname -r 2>/dev/null || printf unknown)"
     printf 'Module directory: %s\n' "$MODULE_DIR"
-
+    printf 'Data directory: %s\n' "$BACUSP_HOME"
     if motor=$(encontrar_motor); then
         printf 'Bacus-Pkg executable: %s\n' "$motor"
     else
         printf '%s\n' "Bacus-Pkg executable: not detected"
     fi
 }
-
-# ---------- Help ----------
+# ---------- Complete help ----------
 mostrar_ayuda() {
     cat <<'EOF'
-BACUSP v6.0 - Bacus-Pkg command frontend
-
-Usage:
+BACUSP v6.1 - Bacus-Pkg Command Frontend
+========================================
+USAGE / USO
   bacusp COMMAND [ARGS...]
-
-Package commands:
-  install, instalar, i       Install a package
-  remove, borrar, rm        Remove a package
-  purge, purgar              Purge a package
-  list, listar, ls           List installed packages
-  search, buscar, s          Search packages
-  info                       Show package details
-  deps, dependencias         Inspect dependencies
-  repo, repositorio          Manage repositories
-  upgrade, actualizar, u     Request a system/package upgrade
-
-System and maintenance:
-  doctor, salud              Diagnose installation
-  audit, auditar              Security audit
-  clean, limpiar              Clean temporary cache
-  backup                      Backup
-  export, exportar             Export environment
-  optimize, optimizar          Optimization module
-  fetch, sysinfo               System information
-  bridge                       Remote build bridge
-  friends, amigos              Community repositories
-  aliases, alias               Manage aliases
-  gui, tui, store              Package interface
-  speedtest, velocidad         Network speed test
-  help, ayuda, h               Show this help
-  version                      Show version and platform
-
-Environment:
-  BACUSP_HOME       BACUSP data directory
-  BACUSP_MODULE_DIR Directory containing module scripts
-  BACUSPKG_BIN      Explicit path to Bacus-Pkg executable
-
-Safety:
-  System upgrades require a verified engine and platform adapter.
-  BACUSP never reports an upgrade as successful when it has not run.
-  Missing adapters are errors, not permission to guess another backend.
+PACKAGE MANAGEMENT / GESTION DE PAQUETES
+  install, instalar, i PACKAGE
+      Install a package / Instalar un paquete
+  remove, borrar, desinstalar, rm PACKAGE
+      Remove a package / Desinstalar un paquete
+  purge, purgar PACKAGE
+      Remove package and its configuration / Eliminar paquete y configuracion
+  list, listar, ls
+      List installed packages / Listar paquetes instalados
+  search, buscar, s QUERY
+      Search available packages / Buscar paquetes
+  info, informacion, detalles PACKAGE
+      Show package details / Mostrar detalles de un paquete
+  deps, dependencias, depend PACKAGE
+      Inspect dependencies / Consultar dependencias
+  repo, repositorio, repos
+      Manage repositories / Gestionar repositorios
+  upgrade, actualizar, up
+      Request a verified package upgrade / Solicitar actualizacion de paquetes
+BACUS-PKG ITSELF / EL PROPIO BACUS-PKG
+  update, actualizar-bacus, self-update
+      Update Bacus-Pkg itself / Actualizar el propio Bacus-Pkg
+  version, version-bacus, --version, -V
+      Show version and platform / Mostrar version y plataforma
+  convert, convertir, conv SOURCE DEST
+      Convert a supported package / Convertir un paquete compatible
+  verify, verificar, check PACKAGE
+      Verify a package / Verificar un paquete
+SYSTEM AND DIAGNOSTICS / SISTEMA Y DIAGNOSTICO
+  system, sistema, fetch, sysinfo
+      Show system information / Mostrar informacion del sistema
+  doctor, salud, diagnostico
+      Diagnose BACUSP / Diagnosticar BACUSP
+  audit, auditar, auditoria
+      Audit installed package records / Auditar registros de paquetes
+MAINTENANCE / MANTENIMIENTO
+  clean, limpiar, cleanup
+      Clean BACUSP temporary cache / Limpiar cache temporal de BACUSP
+  backup, respaldo, copia
+      Create a backup / Crear una copia de seguridad
+  export, exportar
+      Export BACUSP data / Exportar datos de BACUSP
+  optimize, optimizar
+      Run the optimization module / Ejecutar el modulo de optimizacion
+NETWORK AND COMMUNITY / RED Y COMUNIDAD
+  bridge, puente
+      Run the remote build bridge / Ejecutar el puente de compilacion remota
+  friends, amigos
+      Manage community repositories / Gestionar repositorios de la comunidad
+  speedtest, velocidad, test-red
+      Test network request speed / Medir la velocidad de una solicitud de red
+INTERFACE AND SHORTCUTS / INTERFAZ Y ATAJOS
+  gui, tui, store, tienda, tienda-gui
+      Open the available package interface / Abrir la interfaz disponible
+  aliases, alias, atajos
+      Manage command aliases / Gestionar alias de comandos
+HELP / AYUDA
+  help, ayuda, h, -h, --help
+      Show this help / Mostrar esta ayuda
+SAFETY
+  BACUSP does not automatically invoke native package managers.
+  Missing modules and adapters are reported as errors.
+  Package conversion does not guarantee cross-platform compatibility.
+  Verify package authenticity before installing or executing its contents.
+ENVIRONMENT VARIABLES
+  BACUSP_HOME        BACUSP data directory
+  BACUSP_MODULE_DIR  Directory containing module scripts
+  BACUSPKG_BIN       Explicit path to Bacus-Pkg executable
 EOF
 }
-
 # ---------- Command routing ----------
 case "$ACCION" in
     help|ayuda|-h|--help|h)
         mostrar_ayuda
         ;;
-
-    version|--version|-V)
+    version|version-bacus|--version|-V)
         mostrar_sistema
         ;;
-
     system|sistema|fetch|sysinfo)
         if [ -f "$MODULE_DIR/fetch.sh" ]; then
             ejecutar_modulo fetch "$@"
+        elif [ -f "$MODULE_DIR/sysinfo.sh" ]; then
+            ejecutar_modulo sysinfo "$@"
         else
             mostrar_sistema
         fi
         ;;
-
     install|instalar|i)
         ejecutar_modulo install "$@"
         ;;
-
-    remove|borrar|rm|desinstalar)
+    remove|borrar|desinstalar|rm)
         ejecutar_modulo remove "$@"
         ;;
-
     purge|purgar)
         ejecutar_modulo purge "$@"
         ;;
-
     list|listar|ls)
         ejecutar_modulo list "$@"
         ;;
-
     search|buscar|s)
         ejecutar_modulo search "$@"
         ;;
-
-    info)
+    info|informacion|detalles)
         ejecutar_modulo info "$@"
         ;;
-
-    deps|dependencias)
+    deps|dependencias|depend)
         ejecutar_modulo deps "$@"
         ;;
-
-    repo|repositorio)
+    repo|repositorio|repos)
         ejecutar_modulo repo "$@"
         ;;
-
-    upgrade|actualizar|u)
+    upgrade|actualizar|up)
         ejecutar_modulo upgrade "$@"
         ;;
-
-    doctor|salud)
+    update|actualizar-bacus|self-update)
+        ejecutar_modulo update "$@"
+        ;;
+    convert|convertir|conv)
+        ejecutar_modulo convert "$@"
+        ;;
+    verify|verificar|check)
+        ejecutar_modulo verify "$@"
+        ;;
+    doctor|salud|diagnostico)
         ejecutar_modulo doctor "$@"
         ;;
-
-    audit|auditar)
+    audit|auditar|auditoria)
         ejecutar_modulo audit "$@"
         ;;
-
-    clean|limpiar)
+    clean|limpiar|cleanup)
         ejecutar_modulo clean "$@"
         ;;
-
-    backup|respaldo)
+    backup|respaldo|copia)
         ejecutar_modulo backup "$@"
         ;;
-
     export|exportar)
         ejecutar_modulo export "$@"
         ;;
-
     optimize|optimizar)
         ejecutar_modulo optimize "$@"
         ;;
-
-    bridge)
+    bridge|puente)
         ejecutar_modulo bridge "$@"
         ;;
-
     friends|amigos)
         ejecutar_modulo friends "$@"
         ;;
-
     aliases|alias|atajos)
         ejecutar_modulo aliases "$@"
         ;;
-
-    gui|tui|store|tienda-gui)
-        if [ -f "$MODULE_DIR/storegui.sh" ]; then
+    gui|tui|store|tienda|tienda-gui)
+        if [ -f "$MODULE_DIR/store_tui.sh" ]; then
+            ejecutar_modulo store_tui "$@"
+        elif [ -f "$MODULE_DIR/storegui.sh" ]; then
             ejecutar_modulo storegui "$@"
         elif [ -f "$MODULE_DIR/gui.sh" ]; then
             ejecutar_modulo gui "$@"
@@ -379,24 +343,19 @@ case "$ACCION" in
             exit 2
         fi
         ;;
-
-    speedtest|velocidad)
+    speedtest|velocidad|test-red)
         ejecutar_modulo speedtest "$@"
         ;;
-
     nuke-native|destruir-nativo|nuke)
-        error "This command is disabled in BACUSP v6.0."
+        error "This command is disabled."
         warn "Removing native package-management components can break the OS."
-        warn "Use a tested migration plan before replacing system package tools."
         log_msg "Blocked unsafe native package manager removal request"
         exit 2
         ;;
-
     *)
         error "Unknown command: $ACCION"
-        printf '%s\n' "Run 'bacusp help' to see available commands."
+        printf '%s\n' "Run 'bacusp help' or 'bacusp ayuda' for all commands."
         exit 2
         ;;
 esac
-
 exit $?
