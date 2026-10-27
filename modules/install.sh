@@ -1,159 +1,119 @@
 
 #!/bin/sh
-# BACUSP Install - BP v1
-# Called by bin/bacusp
+# Bacus-Pkg BP v2 - Safe user-space installer
 set -eu
 umask 077
 
-error() { printf 'ERROR: %s\n' "$*" >&2; }
-PACKAGE=${1:-}
-
-[ -n "$PACKAGE" ] || {
-    error "Usage: bacusp install PACKAGE.bp"
+PKG=${1:-}
+[ -n "$PKG" ] || {
+    echo "Uso: bacusp install ARCHIVO.bp" >&2
     exit 2
 }
-[ -f "$PACKAGE" ] && [ -r "$PACKAGE" ] || {
-    error "Package not found or unreadable: $PACKAGE"
+[ -f "$PKG" ] && [ -r "$PKG" ] || {
+    echo "ERROR: paquete no legible" >&2
     exit 2
 }
-case "$PACKAGE" in
-    *.bp) ;;
-    *) error "Install accepts .bp packages only"; exit 2 ;;
-esac
 
-command -v tar >/dev/null 2>&1 || {
-    error "tar is required"; exit 2
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+VERIFY="$SCRIPT_DIR/verify.sh"
+[ -f "$VERIFY" ] || {
+    echo "ERROR: falta modules/verify.sh" >&2
+    exit 2
 }
-command -v gzip >/dev/null 2>&1 || {
-    error "gzip is required"; exit 2
+
+sh "$VERIFY" "$PKG" >/dev/null || {
+    echo "ERROR: paquete no válido; instalación cancelada" >&2
+    exit 3
 }
 
 HOME_DIR=${HOME:-}
 [ -n "$HOME_DIR" ] || {
-    error "HOME is not set"; exit 2
+    echo "ERROR: HOME no está configurado" >&2
+    exit 2
 }
-BACUSP_HOME=${BACUSP_HOME:-"$HOME_DIR/.bacusp"}
-APPS="$BACUSP_HOME/apps"
-DB="$BACUSP_HOME/installed.db"
 
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/bacusp-install.XXXXXX") || exit 2
-cleanup() { rm -rf "$WORK"; }
-trap cleanup 0
+ROOT=${BACUSP_HOME:-"$HOME_DIR/.bacusp"}
+APPS="$ROOT/apps"
+DB="$ROOT/installed.db"
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/bp-install.XXXXXX")
+trap 'rm -rf "$WORK"' 0
 trap 'exit 2' HUP INT TERM
 
-# Reject unsafe archive paths before extraction.
-if ! gzip -t "$PACKAGE"; then
-    error "Invalid gzip archive"
-    exit 2
-fi
-if ! tar -tzf "$PACKAGE" > "$WORK/list"; then
-    error "Invalid BP archive"
-    exit 2
-fi
+tar -xzf "$PKG" -C "$WORK"
 
-while IFS= read -r entry; do
-    case "$entry" in
-        /*|..|../*|*/../*|*/..)
-            error "Unsafe archive path: $entry"
-            exit 2
-            ;;
-    esac
-done < "$WORK/list"
-
-tar -xzf "$PACKAGE" -C "$WORK" || {
-    error "Could not extract package"
-    exit 2
-}
-MANIFEST="$WORK/manifest.tsv"
-PAYLOAD="$WORK/payload"
-
-[ -f "$MANIFEST" ] && [ -d "$PAYLOAD" ] || {
-    error "Missing manifest.tsv or payload/"
-    exit 2
+field() {
+    awk -F '\t' -v key="$1" \
+        '$1 == key { print substr($0, length($1)+2); exit }' \
+        "$WORK/manifest.tsv"
 }
 
-get_field() {
-    awk -F '\t' -v key="$1" '
-        $1 == key { print substr($0, length($1) + 2); exit }
-    ' "$MANIFEST"
-}
-
-[ "$(get_field format)" = bp ] &&
-[ "$(get_field format_version)" = 1 ] || {
-    error "Unsupported BP format/version"
-    exit 2
-}
-
-NAME=$(get_field package_name)
-VERSION=$(get_field version)
-STATUS=$(get_field compatibility_status)
-TARGET=$(get_field target_family)
+NAME=$(field package_name)
+VERSION=$(field version)
+STATUS=$(field compatibility_status)
+TARGET=$(field target_family)
+HOST=$(uname -s 2>/dev/null || printf unknown)
 
 case "$NAME" in
     ''|*[!A-Za-z0-9._+-]*)
-        error "Invalid package name"; exit 2 ;;
+        echo "ERROR: nombre inválido" >&2
+        exit 2
+        ;;
 esac
 case "$VERSION" in
     ''|*[!A-Za-z0-9._+-]*)
-        error "Invalid package version"; exit 2 ;;
+        echo "ERROR: versión inválida" >&2
+        exit 2
+        ;;
 esac
 
 [ "$STATUS" = extracted-unverified ] || {
-    error "This BP only contains an original installer/source; it is not installable yet."
+    echo "ERROR: el paquete contiene el original, no una aplicación extraída" >&2
     exit 3
 }
 
-# Do not allow symlinks or special files in this initial installer.
-if find "$PAYLOAD" ! -type d ! -type f -print |
-    grep . >/dev/null 2>&1; then
-    error "Payload contains symlinks or special files; refusing installation."
-    exit 2
-fi
-
-PLATFORM=$(uname -s 2>/dev/null || printf unknown)
-case "$TARGET:$PLATFORM" in
-    linux:Linux|unknown:Linux|unknown:Darwin|unknown:FreeBSD)
+case "$TARGET:$HOST" in
+    portable:*)
         ;;
-    linux:*|windows:*|android-or-alpine:*)
-        error "Target '$TARGET' is not confirmed compatible with '$PLATFORM'."
+    linux:Linux)
+        ;;
+    *)
+        echo "ERROR: compatibilidad no confirmada: $TARGET en $HOST" >&2
         exit 3
         ;;
 esac
 
 DEST="$APPS/$NAME/$VERSION"
 [ ! -e "$DEST" ] || {
-    error "This package version is already installed: $DEST"
+    echo "ERROR: esa versión ya está instalada" >&2
     exit 2
 }
 
-mkdir -p "$APPS/$NAME" "$BACUSP_HOME/sandboxes/$NAME"/documents \
-    "$BACUSP_HOME/sandboxes/$NAME"/downloads \
-    "$BACUSP_HOME/sandboxes/$NAME"/config
+mkdir -p "$APPS/$NAME" "$ROOT/sandboxes/$NAME/documents" \
+    "$ROOT/sandboxes/$NAME/downloads" "$ROOT/sandboxes/$NAME/config"
 
 STAGE="$APPS/$NAME/.install-$$"
-mkdir "$STAGE" || exit 2
-if ! cp -R "$PAYLOAD"/. "$STAGE"/; then
+mkdir "$STAGE"
+cp -R "$WORK/payload"/. "$STAGE"/ || {
     rm -rf "$STAGE"
-    error "Could not copy payload"
+    echo "ERROR: copia fallida" >&2
     exit 2
-fi
+}
 
-if ! mv "$STAGE" "$DEST"; then
+mv "$STAGE" "$DEST" || {
     rm -rf "$STAGE"
-    error "Could not finalize installation"
+    echo "ERROR: no se pudo completar la instalación" >&2
     exit 2
-fi
+}
 
-mkdir -p "$BACUSP_HOME"
+mkdir -p "$ROOT"
 touch "$DB"
 if ! printf '%s\t%s\t%s\t%s\n' \
     "$NAME" "$VERSION" "$TARGET" "$DEST" >> "$DB"; then
     rm -rf "$DEST"
-    error "Could not register installation"
+    echo "ERROR: no se pudo registrar la instalación" >&2
     exit 2
 fi
 
-printf 'Installed: %s %s\n' "$NAME" "$VERSION"
-printf 'Files: %s\n' "$DEST"
-printf 'Data: %s\n' "$BACUSP_HOME/sandboxes/$NAME"
-printf '%s\n' "Note: files are installed in Bacus's user directory; native OS integration is not configured."
+printf 'Instalado en el espacio de usuario: %s\n' "$DEST"
+printf 'Datos de la aplicación: %s/sandboxes/%s\n' "$ROOT" "$NAME"
+echo "Nota: instalar archivos no garantiza que la aplicación sea ejecutable."
