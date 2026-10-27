@@ -1,54 +1,44 @@
 
 #!/bin/sh
-# BACUSP Convert - BP v1
-# Called by bin/bacusp
+# Bacus-Pkg BP v2 - Converter
 set -eu
 umask 077
 
-error() { printf 'ERROR: %s\n' "$*" >&2; }
-ORIGEN=${1:-}
-DESTINO=${2:-}
+err() { printf 'ERROR: %s\n' "$*" >&2; exit 2; }
+ORIG=${1:-}
+DEST=${2:-}
 
-[ -n "$ORIGEN" ] || {
-    error "Usage: bacusp convert SOURCE [DESTINATION.bp]"
-    exit 2
-}
-[ -e "$ORIGEN" ] || {
-    error "Source not found: $ORIGEN"
-    exit 2
-}
+[ -n "$ORIG" ] || err "Uso: bacusp convert ORIGEN DESTINO.bp"
+[ -e "$ORIG" ] || err "No existe: $ORIG"
 
-case "$ORIGEN" in
-    /*) ;;
-    *) ORIGEN="$(pwd)/$ORIGEN" ;;
-esac
+case "$ORIG" in /*) ;; *) ORIG="$(pwd)/$ORIG" ;; esac
 
-if [ -z "$DESTINO" ]; then
-    BASE=$(basename "$ORIGEN")
-    DESTINO="${BASE%.*}.bp"
+if [ -z "$DEST" ]; then
+    BASE=$(basename "$ORIG")
+    DEST="${BASE%.*}.bp"
 fi
-case "$DESTINO" in
-    *.bp) ;;
-    *) error "Destination must end in .bp"; exit 2 ;;
-esac
-[ ! -e "$DESTINO" ] || {
-    error "Destination already exists."
-    exit 2
-}
 
-PARENT=$(dirname "$DESTINO")
-[ -d "$PARENT" ] || {
-    error "Destination directory does not exist: $PARENT"
-    exit 2
-}
-command -v tar >/dev/null 2>&1 || {
-    error "tar is required"; exit 2
-}
-command -v gzip >/dev/null 2>&1 || {
-    error "gzip is required"; exit 2
-}
+case "$DEST" in *.bp) ;; *) err "El destino debe terminar en .bp" ;; esac
+[ ! -e "$DEST" ] || err "El destino ya existe"
 
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/bacusp-convert.XXXXXX") || exit 2
+PARENT=$(dirname "$DEST")
+[ -d "$PARENT" ] || err "No existe el directorio de destino"
+
+command -v tar >/dev/null 2>&1 || err "Se necesita tar"
+command -v gzip >/dev/null 2>&1 || err "Se necesita gzip"
+
+HASH_TOOL=
+if command -v sha256sum >/dev/null 2>&1; then
+    HASH_TOOL=sha256sum
+elif command -v shasum >/dev/null 2>&1; then
+    HASH_TOOL=shasum
+else
+    err "Se necesita sha256sum o shasum para crear un BP verificable"
+fi
+
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/bp-convert.XXXXXX") ||
+    err "No se pudo crear el directorio temporal"
+
 OUT=
 cleanup() {
     rm -rf "$WORK"
@@ -57,99 +47,135 @@ cleanup() {
 trap cleanup 0
 trap 'exit 2' HUP INT TERM
 
-mkdir -p "$WORK/payload" || exit 2
-SOURCE=$(basename "$ORIGEN")
-FORMAT=unknown
-STATUS=source-only
-TARGET=unknown
+mkdir -p "$WORK/payload"
+SOURCE=$(basename "$ORIG")
+FORMAT=directory
+STATUS=extracted-unverified
+TARGET=portable
+EXTRACTED=no
 
-case "$SOURCE" in
-    *.deb)
-        FORMAT=deb
-        TARGET=linux
-        if command -v dpkg-deb >/dev/null 2>&1; then
-            if dpkg-deb -x "$ORIGEN" "$WORK/payload"; then
-                STATUS=extracted-unverified
-            else
-                error "Could not extract .deb"
-                exit 2
-            fi
-        fi
-        ;;
-    *.msi)
-        FORMAT=msi
-        TARGET=windows
-        if command -v msiextract >/dev/null 2>&1; then
-            if msiextract -C "$WORK/payload" "$ORIGEN"; then
-                STATUS=extracted-unverified
-            else
-                error "Could not extract .msi"
-                exit 2
-            fi
-        fi
-        ;;
-    *.rpm)
-        FORMAT=rpm
-        TARGET=linux
-        ;;
-    *.pkg.tar.zst|*.pkg.tar.xz|*.pkg.tar.gz)
-        FORMAT=arch-package
-        TARGET=linux
-        ;;
-    *.apk)
-        FORMAT=apk
-        TARGET=android-or-alpine
-        ;;
-    *.AppImage|*.exe)
-        FORMAT=portable-or-executable
-        ;;
-    *.zip|*.tar|*.tar.gz|*.tgz|*.tar.xz|*.txz|*.tar.zst)
-        FORMAT=archive
-        if command -v bsdtar >/dev/null 2>&1; then
-            if bsdtar -xf "$ORIGEN" -C "$WORK/payload"; then
-                STATUS=extracted-unverified
-            else
-                error "Archive extraction failed"
-                exit 2
-            fi
-        fi
-        ;;
-esac
+safe_tar_list() {
+    LIST=$1
+    while IFS= read -r entry; do
+        case "$entry" in
+            /*|..|../*|*/../*|*/..)
+                err "Ruta peligrosa en el archivo: $entry"
+                ;;
+        esac
+    done < "$LIST"
+}
 
-if [ -d "$ORIGEN" ]; then
-    FORMAT=directory
-    STATUS=extracted-unverified
-    cp -R "$ORIGEN"/. "$WORK/payload/" || {
-        error "Could not copy directory"
-        exit 2
-    }
-elif [ "$STATUS" = source-only ]; then
-    mkdir -p "$WORK/payload/original"
-    cp "$ORIGEN" "$WORK/payload/original/$SOURCE" || exit 2
+if [ -d "$ORIG" ]; then
+    cp -R "$ORIG"/. "$WORK/payload"/ ||
+        err "No se pudo copiar el directorio"
+    EXTRACTED=yes
+else
+    case "$SOURCE" in
+        *.deb)
+            FORMAT=deb
+            TARGET=linux
+            if command -v dpkg-deb >/dev/null 2>&1; then
+                dpkg-deb -x "$ORIG" "$WORK/payload" ||
+                    err "No se pudo extraer el DEB"
+                EXTRACTED=yes
+            fi
+            ;;
+        *.rpm)
+            FORMAT=rpm
+            TARGET=linux
+            if command -v rpm2cpio >/dev/null 2>&1 &&
+               command -v cpio >/dev/null 2>&1; then
+                (cd "$WORK/payload" &&
+                    rpm2cpio "$ORIG" | cpio -idm --no-absolute-filenames) ||
+                    err "No se pudo extraer el RPM"
+                EXTRACTED=yes
+            fi
+            ;;
+        *.zip)
+            FORMAT=zip
+            TARGET=portable
+            if command -v bsdtar >/dev/null 2>&1; then
+                bsdtar -tf "$ORIG" > "$WORK/list" ||
+                    err "ZIP inválido"
+                safe_tar_list "$WORK/list"
+                bsdtar -xf "$ORIG" -C "$WORK/payload" ||
+                    err "No se pudo extraer ZIP"
+                EXTRACTED=yes
+            elif command -v unzip >/dev/null 2>&1; then
+                unzip -Z1 "$ORIG" > "$WORK/list" ||
+                    err "ZIP inválido"
+                safe_tar_list "$WORK/list"
+                unzip -q "$ORIG" -d "$WORK/payload" ||
+                    err "No se pudo extraer ZIP"
+                EXTRACTED=yes
+            fi
+            ;;
+        *.tar|*.tar.gz|*.tgz|*.tar.xz|*.txz|*.tar.zst)
+            FORMAT=tar-archive
+            TARGET=portable
+            tar -tf "$ORIG" > "$WORK/list" ||
+                err "Archivo TAR inválido"
+            safe_tar_list "$WORK/list"
+            tar -xf "$ORIG" -C "$WORK/payload" ||
+                err "No se pudo extraer TAR"
+            EXTRACTED=yes
+            ;;
+        *.msi)
+            FORMAT=msi
+            TARGET=windows
+            if command -v msiextract >/dev/null 2>&1; then
+                msiextract -C "$WORK/payload" "$ORIG" ||
+                    err "No se pudo extraer MSI"
+                EXTRACTED=yes
+            fi
+            ;;
+        *.exe)
+            FORMAT=exe
+            TARGET=windows
+            ;;
+        *.apk)
+            FORMAT=apk-ambiguous
+            TARGET=unknown
+            ;;
+        *.AppImage)
+            FORMAT=appimage
+            TARGET=linux
+            ;;
+        *)
+            FORMAT=unknown
+            TARGET=unknown
+            ;;
+    esac
+
+    if [ "$EXTRACTED" != yes ]; then
+        mkdir -p "$WORK/payload/original"
+        cp "$ORIG" "$WORK/payload/original/$SOURCE" ||
+            err "No se pudo copiar el archivo original"
+        STATUS=source-only
+    fi
 fi
 
-# Fail closed on symlinks and special files in the extracted payload.
+# No admitimos enlaces ni archivos especiales en BP v2.
 if find "$WORK/payload" ! -type d ! -type f -print |
     grep . >/dev/null 2>&1; then
-    error "Symlinks or special files detected; refusing package creation."
-    exit 2
+    err "El contenido tiene enlaces o archivos especiales"
 fi
 
-NAME=$(printf '%s' "${SOURCE%.*}" |
-    tr -cd 'A-Za-z0-9._+-')
+NAME=$(printf '%s' "${SOURCE%.*}" | tr -cd 'A-Za-z0-9._+-')
 [ -n "$NAME" ] || NAME=imported-package
 
-PLATFORM=$(uname -s 2>/dev/null || printf unknown)
+VERSION=0.1.0
+OS=$(uname -s 2>/dev/null || printf unknown)
 ARCH=$(uname -m 2>/dev/null || printf unknown)
 
 {
     printf 'format\tbp\n'
-    printf 'format_version\t1\n'
+    printf 'format_version\t2\n'
     printf 'package_name\t%s\n' "$NAME"
-    printf 'version\t0\n'
+    printf 'version\t%s\n' "$VERSION"
     printf 'source_name\t%s\n' "$SOURCE"
     printf 'source_format\t%s\n' "$FORMAT"
-    printf 'conversion_host\t%s\n' "$PLATFORM"
+    printf 'conversion_host\t%s\n' "$OS"
     printf 'conversion_arch\t%s\n' "$ARCH"
     printf 'target_family\t%s\n' "$TARGET"
     printf 'compatibility_status\t%s\n' "$STATUS"
@@ -157,30 +183,36 @@ ARCH=$(uname -m 2>/dev/null || printf unknown)
 } > "$WORK/manifest.tsv"
 
 cat > "$WORK/COMPATIBILITY.txt" <<EOF
-Bacus-Pkg BP v1
+Bacus-Pkg BP v2
 Source: $SOURCE
-Source format: $FORMAT
+Format: $FORMAT
 Target family: $TARGET
 Status: $STATUS
 
-Conversion does not guarantee that native binaries are portable.
-Original installer scripts were not intentionally executed.
-Review the package before installation.
+BP is a package container, not a binary translator.
+Native compatibility must be checked on the destination system.
+Original installers are never executed during conversion.
 EOF
 
-OUT=$(mktemp "$PARENT/.bacusp-output.XXXXXX") || exit 2
-if ! tar -czf "$OUT" -C "$WORK" manifest.tsv COMPATIBILITY.txt payload; then
-    error "Could not create BP archive"
-    exit 2
-fi
-[ -s "$OUT" ] || {
-    error "Generated archive is empty"
-    exit 2
-}
-mv "$OUT" "$DESTINO" || {
-    error "Could not finalize package"
-    exit 2
-}
+(
+    cd "$WORK"
+    if [ "$HASH_TOOL" = sha256sum ]; then
+        find payload -type f -exec sha256sum '{}' \; > checksums.sha256
+    else
+        find payload -type f -exec shasum -a 256 '{}' \; > checksums.sha256
+    fi
+) || err "No se pudieron generar los hashes"
+
+OUT=$(mktemp "$PARENT/.bp-output.XXXXXX") ||
+    err "No se pudo crear el archivo de salida"
+
+tar -czf "$OUT" -C "$WORK" \
+    manifest.tsv COMPATIBILITY.txt checksums.sha256 payload ||
+    err "No se pudo crear el paquete"
+
+gzip -t "$OUT" || err "El paquete generado está dañado"
+mv "$OUT" "$DEST" || err "No se pudo guardar el paquete"
 OUT=
-printf 'Created: %s\n' "$DESTINO"
-printf 'Source format: %s\nCompatibility: %s\n' "$FORMAT" "$STATUS"
+
+printf 'Creado: %s\n' "$DEST"
+printf 'Formato: BP v2\nOrigen: %s\nEstado: %s\n' "$FORMAT" "$STATUS"
