@@ -214,64 +214,172 @@ PY
         ;;
 esac
 # --------------------------------------------------
-# 2. Import external package formats
+# 2. Real native package installation
 # --------------------------------------------------
+is_root() {
+    [ "$(id -u)" -eq 0 ]
+}
+run_native() {
+    if is_root; then
+        "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        echo "Error: se necesitan permisos de administrador."
+        echo "Ejecuta el comando como root o instala sudo."
+        exit 1
+    fi
+}
+# Install a local package using the native package manager.
 case "$INPUT" in
     *.deb)
-        if [ ! -f "$INPUT" ]; then
-            echo "Error: no se encuentra: $INPUT"
+        [ -f "$INPUT" ] || {
+            echo "Error: archivo .deb no encontrado."
+            exit 1
+        }
+        if command -v apt-get >/dev/null 2>&1; then
+            run_native apt-get install -y "./$INPUT"
+        elif command -v dpkg >/dev/null 2>&1; then
+            echo "Aviso: dpkg no resuelve automáticamente todas las dependencias."
+            run_native dpkg -i "$INPUT"
+            echo "Si faltan dependencias, ejecuta: sudo apt-get -f install"
+        else
+            echo "Error: se necesita apt-get o dpkg."
             exit 1
         fi
-        if ! command -v dpkg-deb >/dev/null 2>&1; then
-            echo "Error: instala dpkg-deb para importar paquetes Debian."
-            echo "En Debian/Ubuntu: sudo apt install dpkg"
-            exit 1
-        fi
-        echo "Paquete Debian detectado."
-        echo "La importación a BP requiere el adaptador convert de Bacus-Pkg."
-        echo "No se instalará directamente en el sistema."
-        echo "Usa: bacusp convert \"$INPUT\" ./paquete.bp"
-        exit 3
+        exit
         ;;
     *.rpm)
-        echo "Formato RPM detectado."
-        echo "Falta implementar el adaptador RPM."
-        echo "No se ejecutará ni instalará el paquete automáticamente."
-        exit 3
+        [ -f "$INPUT" ] || {
+            echo "Error: archivo .rpm no encontrado."
+            exit 1
+        }
+        if command -v dnf >/dev/null 2>&1; then
+            run_native dnf install -y "$INPUT"
+        elif command -v zypper >/dev/null 2>&1; then
+            run_native zypper --non-interactive install "$INPUT"
+        elif command -v yum >/dev/null 2>&1; then
+            run_native yum install -y "$INPUT"
+        else
+            echo "Error: se necesita dnf, zypper o yum."
+            exit 1
+        fi
+        exit
         ;;
     *.apk)
-        echo "Formato APK de Alpine detectado."
-        echo "Falta implementar el adaptador APK de Alpine."
-        exit 3
+        [ -f "$INPUT" ] || {
+            echo "Error: archivo .apk no encontrado."
+            exit 1
+        }
+        if command -v apk >/dev/null 2>&1; then
+            run_native apk add -- "$INPUT"
+        else
+            echo "Error: el gestor apk de Alpine Linux no está disponible."
+            exit 1
+        fi
+        exit
         ;;
     *.pkg.tar.zst|*.pkg.tar.xz|*.pkg.tar.gz)
-        echo "Paquete de Arch Linux detectado."
-        echo "Falta implementar el adaptador de paquetes Arch."
-        exit 3
-        ;;
-    *.tar|*.tar.gz|*.tgz|*.tar.xz|*.tar.zst|*.zip)
-        echo "Archivo comprimido detectado."
-        echo "Un archivo comprimido no es automáticamente un paquete instalable."
-        echo "Convierte su contenido a BP usando un adaptador seguro."
-        exit 3
-        ;;
-    http://*|https://*)
-        echo "URL detectada."
-        echo "La instalación desde URL requiere un repositorio configurado"
-        echo "o un adaptador con verificación de integridad y procedencia."
-        exit 3
+        [ -f "$INPUT" ] || {
+            echo "Error: paquete de Arch no encontrado."
+            exit 1
+        }
+        if command -v pacman >/dev/null 2>&1; then
+            run_native pacman -U -- "$INPUT"
+        else
+            echo "Error: se necesita pacman."
+            exit 1
+        fi
+        exit
         ;;
 esac
 # --------------------------------------------------
-# 3. Repository package names
+# 3. Install a package by name from configured repos
 # --------------------------------------------------
 case "$INPUT" in
-    -*)
-        echo "Error: argumento no válido."
+    ""|-*)
+        echo "Error: nombre de paquete inválido."
         exit 2
         ;;
 esac
-echo "No se encontró un adaptador para: $INPUT"
-echo "Si es un nombre de paquete, configura primero un repositorio."
-echo "Bacus-Pkg aún no tiene un índice universal de todos los repositorios."
+case "$INPUT" in
+    */*|*://*)
+        echo "Error: indica un nombre de paquete o un archivo local."
+        echo "Las URL necesitan un adaptador con verificación de integridad."
+        exit 2
+        ;;
+esac
+# Termux
+if [ -n "${PREFIX:-}" ] &&
+   [ -x "${PREFIX}/bin/pkg" ]; then
+    exec "${PREFIX}/bin/pkg" install "$INPUT"
+fi
+# Debian / Ubuntu and derivatives
+if command -v apt-get >/dev/null 2>&1; then
+    exec sh -c '
+        if [ "$(id -u)" -eq 0 ]; then
+            exec apt-get install -y -- "$1"
+        elif command -v sudo >/dev/null 2>&1; then
+            exec sudo apt-get install -y -- "$1"
+        else
+            echo "Error: se necesita root o sudo." >&2
+            exit 1
+        fi
+    ' sh "$INPUT"
+fi
+# Fedora / RHEL
+if command -v dnf >/dev/null 2>&1; then
+    exec sh -c '
+        if [ "$(id -u)" -eq 0 ]; then
+            exec dnf install -y "$1"
+        elif command -v sudo >/dev/null 2>&1; then
+            exec sudo dnf install -y "$1"
+        else
+            echo "Error: se necesita root o sudo." >&2
+            exit 1
+        fi
+    ' sh "$INPUT"
+fi
+# openSUSE
+if command -v zypper >/dev/null 2>&1; then
+    exec sh -c '
+        if [ "$(id -u)" -eq 0 ]; then
+            exec zypper install "$1"
+        elif command -v sudo >/dev/null 2>&1; then
+            exec sudo zypper install "$1"
+        else
+            echo "Error: se necesita root o sudo." >&2
+            exit 1
+        fi
+    ' sh "$INPUT"
+fi
+# Alpine Linux
+if command -v apk >/dev/null 2>&1; then
+    exec sh -c '
+        if [ "$(id -u)" -eq 0 ]; then
+            exec apk add "$1"
+        elif command -v sudo >/dev/null 2>&1; then
+            exec sudo apk add "$1"
+        else
+            echo "Error: se necesita root o sudo." >&2
+            exit 1
+        fi
+    ' sh "$INPUT"
+fi
+# Arch Linux
+if command -v pacman >/dev/null 2>&1; then
+    exec sh -c '
+        if [ "$(id -u)" -eq 0 ]; then
+            exec pacman -S --needed "$1"
+        elif command -v sudo >/dev/null 2>&1; then
+            exec sudo pacman -S --needed "$1"
+        else
+            echo "Error: se necesita root o sudo." >&2
+            exit 1
+        fi
+    ' sh "$INPUT"
+fi
+echo "No se detectó un gestor de paquetes compatible."
+echo "Bacus-Pkg puede instalar paquetes BP, pero este sistema"
+echo "necesita un adaptador nativo específico."
 exit 3
