@@ -1,88 +1,75 @@
 
 #!/bin/sh
-# BACUSP Bridge - Compatibility Analyzer
-# Called by bin/bacusp
-set -u
+# Bacus-Pkg - Platform compatibility analyzer
+set -eu
 
-SOURCE=${1:-}
-TARGET=${2:-}
+SRC=${1:-}
+TARGET=${2:-$(uname -s 2>/dev/null || echo unknown)}
 
-error() { printf 'ERROR: %s\n' "$*" >&2; }
-
-[ -n "$SOURCE" ] || {
-    error "Usage: bacusp bridge FILE [TARGET_PLATFORM]"
+[ -n "$SRC" ] || {
+    echo "Uso: bacusp bridge ARCHIVO [PLATAFORMA]" >&2
     exit 2
 }
-[ -e "$SOURCE" ] || {
-    error "Source not found: $SOURCE"
+[ -e "$SRC" ] || {
+    echo "ERROR: origen inexistente" >&2
     exit 2
 }
 
-HOST=$(uname -s 2>/dev/null || printf unknown)
-ARCH=$(uname -m 2>/dev/null || printf unknown)
-TARGET=${TARGET:-"$HOST"}
-
-printf '%s\n' "BACUSP Bridge - Compatibility Analysis"
-printf 'Input: %s\n' "$SOURCE"
-printf 'Host: %s (%s)\n' "$HOST" "$ARCH"
-printf 'Target: %s\n' "$TARGET"
-
-TYPE=unknown
 FORMAT=unknown
+TYPE=unknown
+STATUS="Compatibilidad no demostrada"
 
-if [ -d "$SOURCE" ]; then
+if [ -d "$SRC" ]; then
     TYPE=directory
+    FORMAT=directory
 elif command -v file >/dev/null 2>&1; then
-    DESCRIPTION=$(file -b "$SOURCE" 2>/dev/null || printf unknown)
-    printf 'Detected type: %s\n' "$DESCRIPTION"
-    case "$DESCRIPTION" in
-        *ELF*) TYPE=elf-binary ;;
-        *PE32*|*PE32+*) TYPE=windows-binary ;;
-        *Mach-O*) TYPE=macos-binary ;;
-        *script*|*text*) TYPE=script-or-source ;;
-        *gzip*|*Zip*|*archive*) TYPE=archive ;;
+    DESC=$(file -b "$SRC" 2>/dev/null || echo unknown)
+    case "$DESC" in
+        *ELF*) TYPE=elf ;;
+        *PE32*|*PE32+*) TYPE=windows-executable ;;
+        *Mach-O*) TYPE=mach-o ;;
+        *text*|*script*) TYPE=script-or-source ;;
+        *Zip*|*archive*|*gzip*) TYPE=archive ;;
     esac
 fi
 
-case "$SOURCE" in
-    *.bp)
-        FORMAT=bp
-        if command -v tar >/dev/null 2>&1 &&
-           tar -tzf "$SOURCE" >/dev/null 2>&1; then
-            printf '%s\n' "BP archive structure: readable"
-        else
-            printf '%s\n' "BP archive structure: invalid or unreadable"
-            exit 2
-        fi
-        ;;
+case "$SRC" in
+    *.bp) FORMAT=bp ;;
     *.deb) FORMAT=deb ;;
     *.rpm) FORMAT=rpm ;;
     *.msi) FORMAT=msi ;;
     *.exe) FORMAT=exe ;;
     *.AppImage) FORMAT=appimage ;;
-    *.pkg.tar.zst) FORMAT=arch-package ;;
-    *.apk) FORMAT=apk ;;
     *.zip) FORMAT=zip ;;
-    *.tar|*.tar.gz|*.tgz|*.tar.xz|*.tar.zst) FORMAT=tar-archive ;;
+    *.tar|*.tar.gz|*.tgz|*.tar.xz|*.tar.zst) FORMAT=tar ;;
+    *.apk) FORMAT=apk-ambiguous ;;
 esac
-
-printf 'Format: %s\nClassification: %s\n' "$FORMAT" "$TYPE"
 
 case "$TYPE:$TARGET" in
-    elf-binary:Linux|script-or-source:Linux|directory:Linux)
-        printf '%s\n' "Result: potentially compatible; dependencies still need checking."
+    elf:Linux)
+        STATUS="Posiblemente compatible; faltan comprobar arquitectura y bibliotecas"
         ;;
-    windows-binary:Windows*|windows-binary:CYGWIN*|windows-binary:MINGW*)
-        printf '%s\n' "Result: potentially compatible; Windows requirements still need checking."
+    windows-executable:Windows*|windows-executable:MINGW*|windows-executable:CYGWIN*)
+        STATUS="Posiblemente compatible; faltan comprobar requisitos de Windows"
         ;;
-    macos-binary:Darwin)
-        printf '%s\n' "Result: potentially compatible; architecture and libraries still need checking."
+    mach-o:Darwin)
+        STATUS="Posiblemente compatible; faltan comprobar arquitectura y bibliotecas"
+        ;;
+    script-or-source:*)
+        STATUS="Puede ser portable; hay que revisar intérprete y dependencias"
+        ;;
+    directory:*)
+        STATUS="Importable; todavía hay que determinar cómo ejecutar la aplicación"
         ;;
     *)
-        printf '%s\n' "Result: compatibility is not established."
-        printf '%s\n' "Bridge analyzes packages; it does not translate native binaries."
+        STATUS="No se puede confirmar la compatibilidad automáticamente"
         ;;
 esac
 
-printf '%s\n' "No package payload was executed."
-exit 0
+printf 'Bacus-Pkg Bridge\n'
+printf 'Archivo: %s\n' "$SRC"
+printf 'Formato: %s\n' "$FORMAT"
+printf 'Tipo detectado: %s\n' "$TYPE"
+printf 'Destino solicitado: %s\n' "$TARGET"
+printf 'Resultado: %s\n' "$STATUS"
+printf '%s\n' "No se ejecutó ni se tradujo el contenido."
