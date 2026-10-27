@@ -1,218 +1,251 @@
-
 #!/bin/sh
-# Bacus-Pkg BP v2 - Converter
+
+Bacus-Pkg BP v1.0 Binary Converter
+
 set -eu
 umask 077
+LC_ALL=C
+export LC_ALL
 
-err() { printf 'ERROR: %s\n' "$*" >&2; exit 2; }
+err() {
+printf ‘ERROR: %s\n’ “$*” >&2
+exit 2
+}
+
 ORIG=${1:-}
 DEST=${2:-}
 
-[ -n "$ORIG" ] || err "Uso: bacusp convert ORIGEN DESTINO.bp"
-[ -e "$ORIG" ] || err "No existe: $ORIG"
+[ -n “$ORIG” ] || err “Usage: bacusp convert SOURCE DESTINATION.bp”
+[ -e “$ORIG” ] || err “Source does not exist: $ORIG”
 
-case "$ORIG" in /*) ;; *) ORIG="$(pwd)/$ORIG" ;; esac
+case “$ORIG” in
+/*) ;;
+*) ORIG=”$(pwd)/$ORIG” ;;
+esac
 
-if [ -z "$DEST" ]; then
-    BASE=$(basename "$ORIG")
-    DEST="${BASE%.*}.bp"
+if [ -z “$DEST” ]; then
+BASE=$(basename “$ORIG”)
+DEST=”${BASE%.*}.bp”
 fi
 
-case "$DEST" in *.bp) ;; *) err "El destino debe terminar en .bp" ;; esac
-[ ! -e "$DEST" ] || err "El destino ya existe"
+case “$DEST” in
+*.bp) ;;
+*) err “Destination must end in .bp” ;;
+esac
 
-PARENT=$(dirname "$DEST")
-[ -d "$PARENT" ] || err "No existe el directorio de destino"
+[ ! -e “$DEST” ] || err “Destination already exists”
 
-command -v tar >/dev/null 2>&1 || err "Se necesita tar"
-command -v gzip >/dev/null 2>&1 || err "Se necesita gzip"
+PARENT=$(dirname “$DEST”)
+[ -d “$PARENT” ] || err “Destination directory does not exist”
 
-HASH_TOOL=
-if command -v sha256sum >/dev/null 2>&1; then
-    HASH_TOOL=sha256sum
-elif command -v shasum >/dev/null 2>&1; then
-    HASH_TOOL=shasum
-else
-    err "Se necesita sha256sum o shasum para crear un BP verificable"
-fi
+for tool in python3 find cp; do
+command -v “$tool” >/dev/null 2>&1 ||
+err “Required tool missing: $tool”
+done
 
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/bp-convert.XXXXXX") ||
-    err "No se pudo crear el directorio temporal"
+WORK=$(mktemp -d “${TMPDIR:-/tmp}/bp-v1.XXXXXX”) ||
+err “Cannot create temporary directory”
 
 OUT=
 cleanup() {
-    rm -rf "$WORK"
-    [ -z "$OUT" ] || rm -f "$OUT"
+rm -rf “$WORK”
+[ -z “$OUT” ] || rm -f “$OUT”
 }
 trap cleanup 0
-trap 'exit 2' HUP INT TERM
+trap ‘exit 2’ HUP INT TERM
 
-mkdir -p "$WORK/payload"
-SOURCE=$(basename "$ORIG")
+mkdir “$WORK/payload”
+
+SOURCE=$(basename “$ORIG”)
 FORMAT=directory
-STATUS=extracted-unverified
-TARGET=portable
-EXTRACTED=no
 
-safe_tar_list() {
-    LIST=$1
-    while IFS= read -r entry; do
-        case "$entry" in
-            /*|..|../*|*/../*|*/..)
-                err "Ruta peligrosa en el archivo: $entry"
-                ;;
-        esac
-    done < "$LIST"
-}
-
-if [ -d "$ORIG" ]; then
-    cp -R "$ORIG"/. "$WORK/payload"/ ||
-        err "No se pudo copiar el directorio"
-    EXTRACTED=yes
+if [ -d “$ORIG” ]; then
+cp -R “$ORIG”/. “$WORK/payload”/ ||
+err “Cannot copy source directory”
 else
-    case "$SOURCE" in
-        *.deb)
-            FORMAT=deb
-            TARGET=linux
-            if command -v dpkg-deb >/dev/null 2>&1; then
-                dpkg-deb -x "$ORIG" "$WORK/payload" ||
-                    err "No se pudo extraer el DEB"
-                EXTRACTED=yes
-            fi
-            ;;
-        *.rpm)
-            FORMAT=rpm
-            TARGET=linux
-            if command -v rpm2cpio >/dev/null 2>&1 &&
-               command -v cpio >/dev/null 2>&1; then
-                (cd "$WORK/payload" &&
-                    rpm2cpio "$ORIG" | cpio -idm --no-absolute-filenames) ||
-                    err "No se pudo extraer el RPM"
-                EXTRACTED=yes
-            fi
-            ;;
-        *.zip)
-            FORMAT=zip
-            TARGET=portable
-            if command -v bsdtar >/dev/null 2>&1; then
-                bsdtar -tf "$ORIG" > "$WORK/list" ||
-                    err "ZIP inválido"
-                safe_tar_list "$WORK/list"
-                bsdtar -xf "$ORIG" -C "$WORK/payload" ||
-                    err "No se pudo extraer ZIP"
-                EXTRACTED=yes
-            elif command -v unzip >/dev/null 2>&1; then
-                unzip -Z1 "$ORIG" > "$WORK/list" ||
-                    err "ZIP inválido"
-                safe_tar_list "$WORK/list"
-                unzip -q "$ORIG" -d "$WORK/payload" ||
-                    err "No se pudo extraer ZIP"
-                EXTRACTED=yes
-            fi
-            ;;
-        *.tar|*.tar.gz|*.tgz|*.tar.xz|*.txz|*.tar.zst)
-            FORMAT=tar-archive
-            TARGET=portable
-            tar -tf "$ORIG" > "$WORK/list" ||
-                err "Archivo TAR inválido"
-            safe_tar_list "$WORK/list"
-            tar -xf "$ORIG" -C "$WORK/payload" ||
-                err "No se pudo extraer TAR"
-            EXTRACTED=yes
-            ;;
-        *.msi)
-            FORMAT=msi
-            TARGET=windows
-            if command -v msiextract >/dev/null 2>&1; then
-                msiextract -C "$WORK/payload" "$ORIG" ||
-                    err "No se pudo extraer MSI"
-                EXTRACTED=yes
-            fi
-            ;;
-        *.exe)
-            FORMAT=exe
-            TARGET=windows
-            ;;
-        *.apk)
-            FORMAT=apk-ambiguous
-            TARGET=unknown
-            ;;
-        *.AppImage)
-            FORMAT=appimage
-            TARGET=linux
-            ;;
-        *)
-            FORMAT=unknown
-            TARGET=unknown
-            ;;
-    esac
-
-    if [ "$EXTRACTED" != yes ]; then
-        mkdir -p "$WORK/payload/original"
-        cp "$ORIG" "$WORK/payload/original/$SOURCE" ||
-            err "No se pudo copiar el archivo original"
-        STATUS=source-only
-    fi
+case “$SOURCE” in
+.deb)
+command -v dpkg-deb >/dev/null 2>&1 ||
+err “Install dpkg-deb to import DEB files”
+dpkg-deb –extract “$ORIG” “$WORK/payload” ||
+err “Cannot safely import DEB”
+FORMAT=deb-extracted
+;;
+.zip)
+err “ZIP import is disabled until safe extraction is implemented”
+;;
+.tar|.tar.gz|.tgz|.tar.xz|*.txz)
+err “TAR import is disabled until safe extraction is implemented”
+;;
+*)
+err “Unsupported source. Supply a directory or supported DEB file.”
+;;
+esac
 fi
 
-# No admitimos enlaces ni archivos especiales en BP v2.
-if find "$WORK/payload" ! -type d ! -type f -print |
-    grep . >/dev/null 2>&1; then
-    err "El contenido tiene enlaces o archivos especiales"
-fi
+python3 - “$WORK/payload” “$DEST” “$SOURCE” “$FORMAT” <<‘PY’
+import hashlib
+import os
+import pathlib
+import struct
+import sys
+import tempfile
 
-NAME=$(printf '%s' "${SOURCE%.*}" | tr -cd 'A-Za-z0-9._+-')
-[ -n "$NAME" ] || NAME=imported-package
+root = pathlib.Path(sys.argv[1])
+dest = pathlib.Path(sys.argv[2])
+source = sys.argv[3]
+source_format = sys.argv[4]
 
-VERSION=0.1.0
-OS=$(uname -s 2>/dev/null || printf unknown)
-ARCH=$(uname -m 2>/dev/null || printf unknown)
+def fail(message):
+raise SystemExit(“ERROR: “ + message)
 
-{
-    printf 'format\tbp\n'
-    printf 'format_version\t2\n'
-    printf 'package_name\t%s\n' "$NAME"
-    printf 'version\t%s\n' "$VERSION"
-    printf 'source_name\t%s\n' "$SOURCE"
-    printf 'source_format\t%s\n' "$FORMAT"
-    printf 'conversion_host\t%s\n' "$OS"
-    printf 'conversion_arch\t%s\n' "$ARCH"
-    printf 'target_family\t%s\n' "$TARGET"
-    printf 'compatibility_status\t%s\n' "$STATUS"
-    printf 'payload_directory\tpayload\n'
-} > "$WORK/manifest.tsv"
+def checked_path(path):
+rel = path.relative_to(root).as_posix()
+raw = rel.encode(“utf-8”, “strict”)
+if not raw or “\x00” in rel or “\” in rel:
+fail(“Invalid package path”)
+parts = rel.split(”/”)
+if any(p in (””, “.”, “..”) for p in parts):
+fail(“Unsafe package path: “ + rel)
+return rel, raw
 
-cat > "$WORK/COMPATIBILITY.txt" <<EOF
-Bacus-Pkg BP v2
-Source: $SOURCE
-Format: $FORMAT
-Target family: $TARGET
-Status: $STATUS
+entries = []
+for current, dirs, files in os.walk(root, followlinks=False):
+for name in list(dirs) + list(files):
+path = pathlib.Path(current) / name
+if path.is_symlink():
+fail(“Symbolic links are not supported: “ + str(path))
+if not path.is_dir() and not path.is_file():
+fail(“Special files are not supported: “ + str(path))
+rel, raw = checked_path(path)
+entries.append((raw, rel, path, path.is_dir()))
 
-BP is a package container, not a binary translator.
-Native compatibility must be checked on the destination system.
-Original installers are never executed during conversion.
-EOF
+entries.sort(key=lambda e: e[0])
+if len({e[0] for e in entries}) != len(entries):
+fail(“Duplicate paths”)
 
-(
-    cd "$WORK"
-    if [ "$HASH_TOOL" = sha256sum ]; then
-        find payload -type f -exec sha256sum '{}' \; > checksums.sha256
-    else
-        find payload -type f -exec shasum -a 256 '{}' \; > checksums.sha256
-    fi
-) || err "No se pudieron generar los hashes"
+name = pathlib.Path(source).name
+if “.” in name:
+name = name.rsplit(”.”, 1)[0]
+safe_name = “”.join(
+c for c in name if c.isascii() and
+(c.isalnum() or c in “._+-”)
+) or “imported-package”
 
-OUT=$(mktemp "$PARENT/.bp-output.XXXXXX") ||
-    err "No se pudo crear el archivo de salida"
+payload_parts = []
+table_parts = []
+offset = 0
 
-tar -czf "$OUT" -C "$WORK" \
-    manifest.tsv COMPATIBILITY.txt checksums.sha256 payload ||
-    err "No se pudo crear el paquete"
+for raw, rel, path, is_dir in entries:
+if is_dir:
+kind = 1
+data = b””
+digest = bytes(32)
+else:
+kind = 0
+try:
+data = path.read_bytes()
+except OSError as exc:
+fail(“Cannot read file: “ + rel + “: “ + str(exc))
+digest = hashlib.sha256(data).digest()
 
-gzip -t "$OUT" || err "El paquete generado está dañado"
-mv "$OUT" "$DEST" || err "No se pudo guardar el paquete"
-OUT=
+stored = len(data)
+original = stored
+file_offset = 0 if is_dir else offset
+table_parts.append(
+    struct.pack(
+        "<IB3sQQQ32s",
+        len(raw), kind, bytes(3),
+        file_offset, stored, original, digest
+    ) + raw
+)
+if not is_dir and data:
+    payload_parts.append(data)
+    offset += stored
 
-printf 'Creado: %s\n' "$DEST"
-printf 'Formato: BP v2\nOrigen: %s\nEstado: %s\n' "$FORMAT" "$STATUS"
+payload = b””.join(payload_parts)
+table = b””.join(table_parts)
+
+manifest_values = [
+(“package_name”, safe_name),
+(“version”, “0.1.0”),
+(“description”, “Imported package”),
+(“target_os”, “any”),
+(“target_arch”, “any”),
+(“payload_format”, “raw-v1”),
+(“entrypoint”, “”),
+(“file_count”, str(len(entries))),
+(“source_format”, source_format),
+]
+
+def encode_value(value):
+safe = b”ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._+-/”
+out = []
+for b in value.encode(“utf-8”):
+if b in safe and b not in (ord(”%”), ord(”=”)):
+out.append(chr(b))
+else:
+out.append(”%%%02X” % b)
+return “”.join(out)
+
+manifest = “”.join(
+key + “=” + encode_value(value) + “\n”
+for key, value in manifest_values
+).encode(“utf-8”)
+
+header = struct.pack(
+“<8sIIIQQQ”,
+b”BACUSBP1”,
+44,
+0x00010000,
+0,
+len(manifest),
+len(table),
+len(payload),
+)
+
+if len(header) != 44:
+fail(“Internal header size error”)
+
+if dest.exists():
+fail(“Destination already exists”)
+
+dest_parent = dest.parent.resolve()
+fd, temporary = tempfile.mkstemp(
+prefix=”.bp-output-”, suffix=”.tmp”, dir=str(dest_parent)
+)
+
+try:
+with os.fdopen(fd, “wb”) as out:
+out.write(header)
+out.write(manifest)
+out.write(table)
+out.write(payload)
+out.flush()
+os.fsync(out.fileno())
+
+# Validate the finished file's exact length before publishing it.
+expected = 44 + len(manifest) + len(table) + len(payload)
+if os.path.getsize(temporary) != expected:
+    fail("Output size verification failed")
+# Never overwrite an existing destination.
+try:
+    os.link(temporary, dest)
+except FileExistsError:
+    fail("Destination already exists")
+except OSError as exc:
+    fail("Cannot publish output safely: " + str(exc))
+
+finally:
+try:
+os.unlink(temporary)
+except FileNotFoundError:
+pass
+
+print(“Created:”, dest)
+print(“Format: BP v1.0 binary”)
+print(“Source format:”, source_format)
+print(“Files:”, len(entries))
+print(“Payload bytes:”, len(payload))
+print(“Total bytes:”, os.path.getsize(dest))
+PY
