@@ -1,0 +1,7 @@
+{
+“extension.displayName”: “Bacus Studio”,
+“extension.description”: “Crea, valida e inspecciona paquetes .bp de Bacus.”,
+“command.createPackage”: “Bacus: Crear paquete”,
+“command.validatePackage”: “Bacus: Validar paquete”,
+“command.inspectPackage”: “Bacus: Inspeccionar paquete”
+}
