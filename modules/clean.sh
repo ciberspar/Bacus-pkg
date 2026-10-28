@@ -1,33 +1,75 @@
+
 #!/bin/sh
-# ======================================================
-#  Módulo de Limpieza Avanzada - Bacusp 🐢🧹
-# ======================================================
+# BACUSP - Safe Cache Cleaner
+# Limpia únicamente la caché propia de Bacus-Pkg.
+# ES/EN - POSIX shell
 
-echo "🧹 Iniciando análisis y limpieza del sistema..."
-echo "--------------------------------------------------"
+set -eu
 
-TOTAL_BORRADOS=0
+BACUSP_HOME=${BACUSP_HOME:-"${HOME:?HOME no está definido}/.bacusp"}
+CACHE_ROOT="$BACUSP_HOME/cache"
 
-limpiar_ruta() {
-    RUTA=$1
-    ETIQUETA=$2
-    if [ -d "$RUTA" ] || [ -f "$RUTA" ]; then
-        ARCHIVOS=$(ls -A "$RUTA" 2>/dev/null | wc -l | tr -d ' ')
-        if [ "$ARCHIVOS" -gt 0 ]; then
-            echo "🗑️  Limpiando $ETIQUETA ($ARCHIVOS elementos en $RUTA)..."
-            rm -rf "$RUTA"/* 2>/dev/null
-            TOTAL_BORRADOS=$((TOTAL_BORRADOS + ARCHIVOS))
-        else
-            echo "✨ $ETIQUETA ($RUTA) ya estaba limpio."
-        fi
-    fi
+usage() {
+    printf '%s\n' \
+        "Bacus-Pkg: limpieza segura / safe cleanup" \
+        "Uso / Usage: bacusp clean [--yes]" \
+        "Solo elimina el contenido de la caché de Bacus-Pkg."
 }
 
-# Rutas de temporales comunes en iOS/a-shell y Linux
-limpiar_ruta "$HOME/.cache" "Caché de usuario"
-limpiar_ruta "/tmp" "Archivos temporales (/tmp)"
-limpiar_ruta "$HOME/.tmp" "Temporales de a-shell"
-limpiar_ruta "$HOME/.bash_history_tmp" "Historiales temporales"
+case "${1:-}" in
+    "")
+        ;;
+    --help|-h)
+        usage
+        exit 0
+        ;;
+    --yes|-y)
+        ;;
+    *)
+        usage >&2
+        exit 2
+        ;;
+esac
 
-echo "--------------------------------------------------"
-echo "✅ ¡Limpieza completada! Se eliminaron/procesaron $TOTAL_BORRADOS elementos."
+if [ "$#" -gt 1 ]; then
+    usage >&2
+    exit 2
+fi
+
+# No seguir enlaces simbólicos ni aceptar rutas inesperadas.
+if [ -L "$BACUSP_HOME" ] || [ -L "$CACHE_ROOT" ]; then
+    printf '%s\n' "ERROR: ruta de caché simbólica rechazada." >&2
+    exit 1
+fi
+
+if [ ! -d "$CACHE_ROOT" ]; then
+    printf '%s\n' "No existe la caché de Bacus-Pkg; nada que limpiar."
+    exit 0
+fi
+
+case "$CACHE_ROOT" in
+    "$HOME"/.bacusp/cache)
+        ;;
+    *)
+        printf '%s\n' "ERROR: ruta de caché no autorizada." >&2
+        exit 1
+        ;;
+esac
+
+if [ "${1:-}" != "--yes" ] && [ "${1:-}" != "-y" ]; then
+    printf '¿Limpiar la caché de Bacus-Pkg? / Clean Bacus-Pkg cache? [s/N] '
+    IFS= read -r answer || answer=""
+    case "$answer" in
+        s|S|si|SI|sí|Sí|y|Y|yes|YES)
+            ;;
+        *)
+            printf '%s\n' "Cancelado / Cancelled."
+            exit 0
+            ;;
+    esac
+fi
+
+# Borrar entradas directas, incluidos los nombres ocultos.
+find "$CACHE_ROOT" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+
+printf '%s\n' "Caché de Bacus-Pkg limpiada / Bacus-Pkg cache cleaned."
