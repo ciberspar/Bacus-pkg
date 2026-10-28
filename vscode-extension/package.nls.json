@@ -1,7 +1,8 @@
+
 {
-“extension.displayName”: “Bacus Studio”,
-“extension.description”: “Create, validate and inspect Bacus .bp packages.”,
-“command.createPackage”: “Bacus: Create Package”,
-“command.validatePackage”: “Bacus: Validate Package”,
-“command.inspectPackage”: “Bacus: Inspect Package”
+  "extension.displayName": "Bacus Studio",
+  "extension.description": "Create, validate and inspect Bacus .bp packages.",
+  "command.createPackage": "Bacus: Create Package",
+  "command.validatePackage": "Bacus: Validate Package",
+  "command.inspectPackage": "Bacus: Inspect Package"
 }
