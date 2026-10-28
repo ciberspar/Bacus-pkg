@@ -1,15 +1,16 @@
 
 #!/bin/sh
 #
-# BACUSP v7.3 - Modular Package Manager Frontend
+# BACUSP v7.4 - Modular Package Manager Frontend
 # Project: Bacus-Pkg
 # Author: ciberspar
 # Target: ChiquiOS / POSIX-compatible environments
+# Languages: Spanish / English
 #
 
 set -u
 
-VERSION="7.3"
+VERSION="7.4"
 APP="BACUSP"
 
 # ---------- Colors ----------
@@ -45,12 +46,12 @@ SCRIPT_DIR=$(
 
 MODULE_DIR="${BACUSP_MODULE_DIR:-$SCRIPT_DIR/../modules}"
 
-mkdir -p "$BACUSP_HOME" "$CACHE_DIR" || {
+if ! mkdir -p "$BACUSP_HOME" "$CACHE_DIR"; then
     printf '%s\n' "BACUSP: cannot create its data directory." >&2
     exit 1
-}
+fi
 
-# ---------- Messages and logging ----------
+# ---------- Logging ----------
 log_msg() {
     printf '%s [%s] %s\n' \
         "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || printf unknown)" \
@@ -79,6 +80,13 @@ detectar_entorno() {
 
     case "$OS_NAME" in
         Linux)
+            if [ -n "${TERMUX_VERSION:-}" ] ||
+               { [ -n "${PREFIX:-}" ] && [ -x "${PREFIX}/bin/pkg" ]; }
+            then
+                printf '%s\n' "termux"
+                return
+            fi
+
             if [ -r /etc/os-release ]; then
                 ID=""
                 ID_LIKE=""
@@ -86,40 +94,39 @@ detectar_entorno() {
                 . /etc/os-release
 
                 case "${ID:-}" in
-                    debian)   printf 'debian'; return ;;
-                    ubuntu)   printf 'ubuntu'; return ;;
-                    arch)     printf 'arch'; return ;;
-                    fedora)   printf 'fedora'; return ;;
-                    opensuse*) printf 'opensuse'; return ;;
-                    alpine)   printf 'alpine'; return ;;
+                    debian) printf '%s\n' "debian"; return ;;
+                    ubuntu) printf '%s\n' "ubuntu"; return ;;
+                    arch) printf '%s\n' "arch"; return ;;
+                    fedora) printf '%s\n' "fedora"; return ;;
+                    opensuse*|opensuse-tumbleweed|opensuse-leap)
+                        printf '%s\n' "opensuse"
+                        return
+                        ;;
+                    alpine) printf '%s\n' "alpine"; return ;;
                 esac
 
                 case " ${ID_LIKE:-} " in
-                    *" debian "*) printf 'debian-like'; return ;;
-                    *" arch "*)   printf 'arch-like'; return ;;
-                    *" fedora "*) printf 'fedora-like'; return ;;
+                    *" debian "*) printf '%s\n' "debian-like"; return ;;
+                    *" arch "*) printf '%s\n' "arch-like"; return ;;
+                    *" fedora "*) printf '%s\n' "fedora-like"; return ;;
                 esac
             fi
-            printf 'linux-unknown'
+
+            printf '%s\n' "linux-unknown"
             ;;
-        Darwin)  printf 'darwin' ;;
-        FreeBSD) printf 'freebsd' ;;
-        OpenBSD) printf 'openbsd' ;;
-        NetBSD)  printf 'netbsd' ;;
-        GNU)     printf 'hurd' ;;
-        Haiku)   printf 'haiku' ;;
+        Darwin)  printf '%s\n' "darwin" ;;
+        FreeBSD) printf '%s\n' "freebsd" ;;
+        OpenBSD) printf '%s\n' "openbsd" ;;
+        NetBSD)  printf '%s\n' "netbsd" ;;
+        GNU)     printf '%s\n' "hurd" ;;
+        Haiku)   printf '%s\n' "haiku" ;;
         *)
-            if [ -n "${TERMUX_VERSION:-}" ]; then
-                printf 'termux'
-            else
-                printf 'posix-unknown'
-            fi
+            printf '%s\n' "posix-unknown"
             ;;
     esac
 }
 
 ENTORNO=$(detectar_entorno)
-ACCION=${1:-help}
 
 # ---------- Engine discovery ----------
 BACUSPKG_BIN="${BACUSPKG_BIN:-}"
@@ -147,14 +154,6 @@ encontrar_motor() {
     command -v bacus-pkg 2>/dev/null
 }
 
-motor_no_conectado() {
-    error "Bacus-Pkg engine is not configured for this operation."
-    warn "Platform / Plataforma: $ENTORNO"
-    warn "No native package manager fallback was used."
-    log_msg "Engine unavailable: action=$ACCION platform=$ENTORNO"
-    return 2
-}
-
 # ---------- Module dispatcher ----------
 ejecutar_modulo() {
     modulo=$1
@@ -163,23 +162,27 @@ ejecutar_modulo() {
     archivo="$MODULE_DIR/$modulo.sh"
 
     if [ ! -f "$archivo" ]; then
-        error "Module not found / Modulo no encontrado: $modulo"
+        error "Module not found / Módulo no encontrado: $modulo"
+        warn "Ruta esperada / Expected path: $archivo"
         log_msg "Missing module: $modulo"
         return 2
     fi
 
     if [ ! -r "$archivo" ]; then
-        error "Module is not readable / Modulo no legible: $modulo"
+        error "Module is not readable / Módulo no legible: $modulo"
         log_msg "Unreadable module: $modulo"
         return 2
     fi
 
     log_msg "Running module=$modulo platform=$ENTORNO"
 
+    # Los módulos se ejecutan con sh para no depender de chmod.
     sh "$archivo" "$@"
     resultado=$?
 
-    if [ "$resultado" -ne 0 ]; then
+    if [ "$resultado" -eq 0 ]; then
+        log_msg "Module completed: $modulo"
+    else
         log_msg "Module failed: $modulo exit=$resultado"
     fi
 
@@ -188,14 +191,17 @@ ejecutar_modulo() {
 
 # ---------- System information ----------
 mostrar_sistema() {
-    printf '%s\n' "BACUSP v$VERSION"
+    printf '\n%s\n' "BACUSP v$VERSION"
+    printf '%s\n' "----------------------------------------"
     printf 'Platform / Plataforma: %s\n' "$ENTORNO"
     printf 'Architecture / Arquitectura: %s\n' \
         "$(uname -m 2>/dev/null || printf unknown)"
-    printf 'Kernel / Nucleo: %s\n' \
+    printf 'Kernel / Núcleo: %s\n' \
         "$(uname -r 2>/dev/null || printf unknown)"
-    printf 'Module directory / Modulos: %s\n' "$MODULE_DIR"
+    printf 'Module directory / Módulos: %s\n' "$MODULE_DIR"
     printf 'Data directory / Datos: %s\n' "$BACUSP_HOME"
+    printf 'Cache: %s\n' "$CACHE_DIR"
+    printf 'Database / Base de datos: %s\n' "$DB_FILE"
 
     if motor=$(encontrar_motor); then
         printf 'Bacus-Pkg engine / Motor: %s\n' "$motor"
@@ -208,22 +214,28 @@ mostrar_sistema() {
 mostrar_ayuda() {
     cat <<EOF
 BACUSP v$VERSION - Bacus-Pkg
-Gestor de paquetes / Package manager
+Gestor modular de paquetes / Modular package manager
 
 USO / USAGE
   bacusp COMANDO [ARGUMENTOS]
+  bacusp help
+  bacusp version
 
 PAQUETES / PACKAGES
-  install PAQUETE.bp
-    Instalar un paquete Bacus
-    Install a Bacus package
+  install ARCHIVO.bp
+    Instalar un paquete BP
+    Install a BP package
+
+  install ARCHIVO.deb|.rpm|.apk
+    Usar el gestor nativo compatible
+    Use the compatible native package manager
 
   remove NOMBRE
     Desinstalar un paquete
     Remove a package
 
   purge NOMBRE
-    Eliminar paquete y configuracion
+    Eliminar paquete y configuración
     Remove package and configuration
 
   list
@@ -235,7 +247,7 @@ PAQUETES / PACKAGES
     Search packages
 
   info NOMBRE
-    Mostrar informacion del paquete
+    Mostrar información del paquete
     Show package information
 
   deps NOMBRE
@@ -243,38 +255,60 @@ PAQUETES / PACKAGES
     Inspect dependencies
 
   repo list|add|remove
-    Gestionar repositorios configurados
-    Manage configured repositories
+    Gestionar repositorios
+    Manage repositories
+
+ACTUALIZACIONES / UPDATES
+  update [--lang es|en]
+    Abrir el centro TUI de actualizaciones
+    Open the update TUI
 
   upgrade
-    Actualizar paquetes instalados
-    Upgrade installed packages
+    Alias de update
+    Alias for update
 
 FORMATO BP / BP FORMAT
-  convert ARCHIVO
-    Crear ARCHIVO.bp
-    Create ARCHIVO.bp
+  convert ORIGEN
+    Crear un archivo .bp
+    Create a .bp file
 
   convert ORIGEN DESTINO.bp
-    Convertir un archivo al formato BP
-    Convert a file to BP format
+    Empaquetar un archivo como BP
+    Package one file as BP
 
-  convert --portable ARCHIVO
-    Crear ARCHIVO-portable.bp
-    Create ARCHIVO-portable.bp
+  convert --portable ORIGEN [DESTINO.bp]
+    Crear un paquete marcado como portable
+    Create a package marked as portable
+
+  verify ARCHIVO.bp
+    Validar estructura e integridad SHA-256
+    Validate structure and SHA-256 integrity
 
   bridge ARCHIVO [PLATAFORMA]
     Analizar compatibilidad
     Analyze compatibility
 
-  verify ARCHIVO.bp
-    Verificar el paquete BP
-    Verify a BP package
+MANTENIMIENTO / MAINTENANCE
+  clean
+    Limpiar caché de Bacus-Pkg
+    Clean the Bacus-Pkg cache
+
+  backup
+    Crear respaldo
+    Create a backup
+
+  export
+    Exportar datos
+    Export data
+
+  optimize
+    Optimizar datos locales
+    Optimize local data
 
 SISTEMA / SYSTEM
   system
-    Informacion del sistema
-    System information
+    Mostrar información del sistema
+    Show system information
 
   doctor
     Diagnosticar Bacus-Pkg
@@ -285,30 +319,13 @@ SISTEMA / SYSTEM
     Review logs
 
   version
-    Mostrar version y plataforma
+    Mostrar versión y plataforma
     Show version and platform
-
-MANTENIMIENTO / MAINTENANCE
-  clean
-    Limpiar cache
-    Clean cache
-
-  backup
-    Crear respaldo
-    Create backup
-
-  export
-    Exportar datos
-    Export data
-
-  optimize
-    Optimizar datos
-    Optimize data
 
 INTERFAZ / INTERFACE
   gui | tui | store
-    Abrir interfaz de paquetes
-    Open package interface
+    Abrir la interfaz disponible
+    Open the available interface
 
   aliases
     Mostrar alias disponibles
@@ -324,24 +341,33 @@ RED / NETWORK
     Test network
 
 AYUDA / HELP
-  help
+  help | ayuda
     Mostrar esta ayuda
     Show this help
 
 SEGURIDAD / SECURITY
-  Un archivo convertido no garantiza compatibilidad.
-  Conversion does not guarantee compatibility.
-  No se ejecutan scripts externos automaticamente.
-  External scripts are not run automatically.
+  verify comprueba estructura e integridad, no malware.
+  verify checks structure and integrity, not malware.
+
+  convert empaqueta el archivo original; no lo transforma
+  automáticamente en una aplicación nativa.
+  convert wraps the original file; it does not automatically
+  transform it into a native application.
+
+  Las actualizaciones del sistema requieren confirmación.
+  System updates require confirmation.
 
 VARIABLES / ENVIRONMENT
   BACUSP_HOME
   BACUSP_MODULE_DIR
   BACUSPKG_BIN
+  BACUSP_LANG
 EOF
 }
 
 # ---------- Command routing ----------
+ACCION=${1:-help}
+
 case "$ACCION" in
     help|ayuda|-h|--help|h)
         mostrar_ayuda
@@ -402,12 +428,9 @@ case "$ACCION" in
         ejecutar_modulo repo "$@"
         ;;
 
-    upgrade|actualizar|up)
-        shift
-        ejecutar_modulo upgrade "$@"
-        ;;
-
-    update|actualizar-bacus|self-update)
+    # Both commands use the interactive update center.
+    # This avoids invoking an older, potentially unsafe upgrade script.
+    upgrade|actualizar|up|update|actualizar-bacus|self-update)
         shift
         ejecutar_modulo update "$@"
         ;;
@@ -477,7 +500,7 @@ case "$ACCION" in
             ejecutar_modulo gui "$@"
         else
             error "No package interface module is installed."
-            error "No hay un modulo de interfaz instalado."
+            error "No hay un módulo de interfaz instalado."
             exit 2
         fi
         ;;
@@ -489,15 +512,15 @@ case "$ACCION" in
 
     nuke-native|destruir-nativo|nuke)
         error "This command is disabled."
-        warn "Removing native package-management components can break the OS."
-        warn "Eliminar componentes nativos puede danar el sistema."
-        log_msg "Blocked unsafe native package manager removal request"
+        warn "Removing native package managers can break the OS."
+        warn "Eliminar gestores nativos puede dañar el sistema."
+        log_msg "Blocked native package manager removal request"
         exit 2
         ;;
 
     *)
         error "Unknown command / Comando desconocido: $ACCION"
-        printf '%s\n' "Run 'bacusp help' or 'bacusp ayuda'."
+        printf '%s\n' "Ejecutá 'bacusp help' o 'bacusp ayuda'."
         exit 2
         ;;
 esac
