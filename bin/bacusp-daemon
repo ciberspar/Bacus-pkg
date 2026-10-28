@@ -1,63 +1,258 @@
+
 #!/bin/sh
-# ======================================================================
-#  BACUSP WATCH DOGS DAEMON (Centinela Silencioso) 🐢👁️
-#  Creador: ciberspar
-#  Descripción: Monitoreo en segundo plano con bajo consumo y arranque suave.
-# ======================================================================
+#
+# BACUSP DAEMON v1.0
+# Bacus-Pkg Background Service
+# Author: ciberspar
+#
+# Commands:
+#   bacusp-daemon start
+#   bacusp-daemon stop
+#   bacusp-daemon status
+#   bacusp-daemon run
+#   bacusp-daemon logs
+#
 
-VERDE='\033[1;32m'
-CYAN='\033[1;36m'
-AMARILLO='\033[1;33m'
-ROJO='\033[1;31m'
-MAGENTA='\033[1;35m'
-RESET='\033[0m'
+set -u
+umask 077
 
-BACUSP_HOME="$HOME/.bacusp"
-LOG_FILE="$BACUSP_HOME/bacusp.log"
-DB_FILE="$BACUSP_HOME/installed.db"
-INTERVALO=3600  # Revisa cada 1 hora (3600 segundos)
+APP="BACUSP-DAEMON"
+BACUSP_HOME="${BACUSP_HOME:-${HOME:-/tmp}/.bacusp}"
+LOG_FILE="$BACUSP_HOME/bacusp-daemon.log"
+PID_FILE="$BACUSP_HOME/bacusp-daemon.pid"
+INTERVAL="${BACUSP_DAEMON_INTERVAL:-3600}"
 
-log_daemon() {
-    TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
-    echo "[$TIMESTAMP] [WATCH_DOGS] $1" >> "$LOG_FILE"
+mkdir -p "$BACUSP_HOME" || {
+    printf '%s\n' "ERROR: cannot create Bacus directory." >&2
+    exit 1
 }
 
-militar_watchdog() {
-    # 🛑 Espera inicial de 30s al arrancar el SO para no saturar la CPU ni el disco
+log_msg() {
+    printf '%s [%s] %s\n' \
+        "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || printf unknown)" \
+        "$APP" "$*" >> "$LOG_FILE"
+}
+
+error() {
+    printf 'ERROR: %s\n' "$*" >&2
+}
+
+get_pid() {
+    [ -r "$PID_FILE" ] || return 1
+    IFS= read -r PID < "$PID_FILE" || return 1
+    case "$PID" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    [ "$PID" -gt 1 ] 2>/dev/null || return 1
+    printf '%s\n' "$PID"
+}
+
+is_running() {
+    PID=$(get_pid) || return 1
+    kill -0 "$PID" 2>/dev/null
+}
+
+check_environment() {
+    DB_FILE="$BACUSP_HOME/installed.db"
+
+    if [ ! -f "$DB_FILE" ]; then
+        log_msg "WARNING: installed.db is missing; no automatic reconstruction attempted."
+    elif [ ! -r "$DB_FILE" ]; then
+        log_msg "WARNING: installed.db is not readable."
+    fi
+
+    if [ ! -d "$BACUSP_HOME/cache" ]; then
+        if mkdir -p "$BACUSP_HOME/cache" 2>/dev/null; then
+            log_msg "Created missing cache directory."
+        else
+            log_msg "WARNING: cannot create cache directory."
+        fi
+    fi
+
+    if command -v git >/dev/null 2>&1; then
+        log_msg "Git is available."
+    else
+        log_msg "Git is unavailable; remote update checks are disabled."
+    fi
+}
+
+check_updates() {
+    SCRIPT_DIR=$(
+        CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null &&
+        pwd -P
+    ) || return 0
+
+    REPO_DIR=$(
+        CDPATH='' cd -- "$SCRIPT_DIR" 2>/dev/null &&
+        pwd -P
+    ) || return 0
+
+    if [ ! -d "$REPO_DIR/.git" ]; then
+        return 0
+    fi
+
+    if ! command -v git >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if ! git -C "$REPO_DIR" rev-parse --abbrev-ref '@{upstream}' \
+        >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if ! git -C "$REPO_DIR" fetch --quiet origin; then
+        log_msg "WARNING: remote update check failed."
+        return 0
+    fi
+
+    LOCAL=$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null) || return 0
+    REMOTE=$(git -C "$REPO_DIR" rev-parse '@{upstream}' 2>/dev/null) || return 0
+
+    if [ "$LOCAL" != "$REMOTE" ]; then
+        log_msg "UPDATE AVAILABLE: local revision differs from upstream."
+    else
+        log_msg "Bacus core is up to date with its configured upstream."
+    fi
+}
+
+check_recent_errors() {
+    [ -f "$BACUSP_HOME/bacusp.log" ] || return 0
+
+    if grep -i -E 'error|fail|fallo' "$BACUSP_HOME/bacusp.log" \
+        >/dev/null 2>&1; then
+        log_msg "NOTICE: error-like text exists in Bacus logs; inspect them for details."
+    fi
+}
+
+run_loop() {
+    trap 'log_msg "Daemon stopped."; rm -f "$PID_FILE"; exit 0' INT TERM HUP
+
+    printf '%s\n' "$$" > "$PID_FILE" || {
+        error "Cannot write PID file."
+        exit 1
+    }
+
+    log_msg "Daemon started; interval=${INTERVAL}s."
     sleep 30
-    log_daemon "Iniciando servicio Watch Dogs Centinela de Bacusp..."
 
-    while true; do
-        # 1. Chequeo de integridad de la base de datos
-        if [ ! -f "$DB_FILE" ]; then
-            touch "$DB_FILE"
-            log_daemon "ALERTA: 'installed.db' no encontrada. Regenerando archivo base..."
-        fi
+    while :; do
+        check_environment
+        check_updates
+        check_recent_errors
 
-        # 2. Monitoreo del repositorio oficial (bacus-pkg) y updates del Core
-        BACUSP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-        if [ -d "$BACUSP_DIR/.git" ]; then
-            cd "$BACUSP_DIR" && git fetch origin >/dev/null 2>&1
-            LOCAL=$(git rev-parse HEAD 2>/dev/null)
-            REMOTE=$(git rev-parse @{u} 2>/dev/null)
-
-            if [ -n "$LOCAL" ] && [ -n "$REMOTE" ] && [ "$LOCAL" != "$REMOTE" ]; then
-                echo "${CYAN}🔔 [WATCH DOGS]: ¡Hay una nueva versión de Bacusp en GitHub! Ejecutá 'bacusp upgrade'.${RESET}"
-                log_daemon "NOTIFICACIÓN: Actualización remota disponible."
-            fi
-        fi
-
-        # 3. Detección silenciosa de errores en logs recientes
-        if [ -f "$LOG_FILE" ]; then
-            ULTIMO_ERROR=$(grep -i "error\|fail\|fallo" "$LOG_FILE" | tail -n 1)
-            if [ -n "$ULTIMO_ERROR" ]; then
-                log_daemon "ANOMALÍA DETECTADA: $ULTIMO_ERROR"
-            fi
-        fi
-
-        sleep $INTERVALO
+        sleep "$INTERVAL" &
+        wait "$!" || :
     done
 }
 
-# Ejecutar centinela en bucle
-militar_watchdog
+start_daemon() {
+    if is_running; then
+        printf 'Bacus daemon already running (PID %s).\n' "$(get_pid)"
+        return 0
+    fi
+
+    rm -f "$PID_FILE"
+
+    # Start a detached process when supported by the environment.
+    if command -v nohup >/dev/null 2>&1; then
+        nohup "$0" run </dev/null >/dev/null 2>&1 &
+        CHILD=$!
+        printf '%s\n' "$CHILD" > "$PID_FILE"
+        sleep 1
+
+        if kill -0 "$CHILD" 2>/dev/null; then
+            printf 'Bacus daemon started (PID %s).\n' "$CHILD"
+            return 0
+        fi
+
+        rm -f "$PID_FILE"
+        error "Daemon failed to start. Check $LOG_FILE"
+        return 1
+    fi
+
+    error "Cannot start in background: nohup is unavailable."
+    return 1
+}
+
+stop_daemon() {
+    if ! is_running; then
+        rm -f "$PID_FILE"
+        printf '%s\n' "Bacus daemon is not running."
+        return 0
+    fi
+
+    PID=$(get_pid) || {
+        error "Invalid PID file."
+        return 1
+    }
+
+    kill -TERM "$PID" 2>/dev/null || {
+        error "Cannot stop daemon."
+        return 1
+    }
+
+    printf 'Stop signal sent to daemon PID %s.\n' "$PID"
+    printf '%s\n' "Use 'bacusp-daemon status' to confirm it stopped."
+}
+
+show_status() {
+    if is_running; then
+        printf 'Bacus daemon is running (PID %s).\n' "$(get_pid)"
+    else
+        printf '%s\n' "Bacus daemon is not running."
+        return 1
+    fi
+}
+
+show_logs() {
+    if [ -f "$LOG_FILE" ]; then
+        tail -n 40 "$LOG_FILE"
+    else
+        printf '%s\n' "No daemon logs yet."
+    fi
+}
+
+case "${1:-help}" in
+    start)
+        start_daemon
+        ;;
+    stop)
+        stop_daemon
+        ;;
+    status)
+        show_status
+        ;;
+    run)
+        if is_running && [ "$(get_pid)" != "$$" ]; then
+            error "Another daemon may already be running."
+            exit 1
+        fi
+        run_loop
+        ;;
+    logs)
+        show_logs
+        ;;
+    check)
+        check_environment
+        check_updates
+        check_recent_errors
+        printf '%s\n' "Checks completed. Review the daemon log."
+        ;;
+    help|-h|--help)
+        cat <<'EOF'
+BACUSP DAEMON - Background service
+
+Usage / Uso:
+  bacusp-daemon start   Start service / Iniciar servicio
+  bacusp-daemon stop    Stop service / Detener servicio
+  bacusp-daemon status  Check status / Ver estado
+  bacusp-daemon logs    Show logs / Ver registros
+  bacusp-daemon check   Run checks / Ejecutar comprobaciones
+  bacusp-daemon run     Internal foreground mode
+EOF
+        ;;
+    *)
+        error "Unknown command: $1"
+        exit 2
+        ;;
+esac
