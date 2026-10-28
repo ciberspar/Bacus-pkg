@@ -1,17 +1,15 @@
 
 #!/bin/sh
 #
-# BACUSP v7.2 - Modular Package Manager Frontend
+# BACUSP v7.3 - Modular Package Manager Frontend
 # Project: Bacus-Pkg
 # Author: ciberspar
 # Target: ChiquiOS / POSIX-compatible environments
 #
-# BACUSP is the main CLI dispatcher for Bacus-Pkg.
-# Modules are internal components managed by this frontend.
-#
+
 set -u
 
-VERSION="7.2"
+VERSION="7.3"
 APP="BACUSP"
 
 # ---------- Colors ----------
@@ -52,7 +50,7 @@ mkdir -p "$BACUSP_HOME" "$CACHE_DIR" || {
     exit 1
 }
 
-# ---------- Logging ----------
+# ---------- Messages and logging ----------
 log_msg() {
     printf '%s [%s] %s\n' \
         "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || printf unknown)" \
@@ -88,12 +86,12 @@ detectar_entorno() {
                 . /etc/os-release
 
                 case "${ID:-}" in
-                    debian)    printf 'debian'; return ;;
-                    ubuntu)    printf 'ubuntu'; return ;;
-                    arch)      printf 'arch'; return ;;
-                    fedora)    printf 'fedora'; return ;;
+                    debian)   printf 'debian'; return ;;
+                    ubuntu)   printf 'ubuntu'; return ;;
+                    arch)     printf 'arch'; return ;;
+                    fedora)   printf 'fedora'; return ;;
                     opensuse*) printf 'opensuse'; return ;;
-                    alpine)    printf 'alpine'; return ;;
+                    alpine)   printf 'alpine'; return ;;
                 esac
 
                 case " ${ID_LIKE:-} " in
@@ -123,7 +121,7 @@ detectar_entorno() {
 ENTORNO=$(detectar_entorno)
 ACCION=${1:-help}
 
-# ---------- Bacus-Pkg engine ----------
+# ---------- Engine discovery ----------
 BACUSPKG_BIN="${BACUSPKG_BIN:-}"
 
 encontrar_motor() {
@@ -151,9 +149,8 @@ encontrar_motor() {
 
 motor_no_conectado() {
     error "Bacus-Pkg engine is not configured for this operation."
-    warn "Platform: $ENTORNO"
-    warn "No native package manager was used as a fallback."
-    warn "Configure the verified Bacus-Pkg interface first."
+    warn "Platform / Plataforma: $ENTORNO"
+    warn "No native package manager fallback was used."
     log_msg "Engine unavailable: action=$ACCION platform=$ENTORNO"
     return 2
 }
@@ -166,13 +163,13 @@ ejecutar_modulo() {
     archivo="$MODULE_DIR/$modulo.sh"
 
     if [ ! -f "$archivo" ]; then
-        error "Module not found: $modulo ($archivo)"
+        error "Module not found / Modulo no encontrado: $modulo"
         log_msg "Missing module: $modulo"
         return 2
     fi
 
     if [ ! -r "$archivo" ]; then
-        error "Module is not readable: $modulo"
+        error "Module is not readable / Modulo no legible: $modulo"
         log_msg "Unreadable module: $modulo"
         return 2
     fi
@@ -195,131 +192,153 @@ mostrar_sistema() {
     printf 'Platform / Plataforma: %s\n' "$ENTORNO"
     printf 'Architecture / Arquitectura: %s\n' \
         "$(uname -m 2>/dev/null || printf unknown)"
-    printf 'Kernel / Núcleo: %s\n' \
+    printf 'Kernel / Nucleo: %s\n' \
         "$(uname -r 2>/dev/null || printf unknown)"
-    printf 'Module directory / Directorio de módulos: %s\n' "$MODULE_DIR"
-    printf 'Data directory / Directorio de datos: %s\n' "$BACUSP_HOME"
+    printf 'Module directory / Modulos: %s\n' "$MODULE_DIR"
+    printf 'Data directory / Datos: %s\n' "$BACUSP_HOME"
 
     if motor=$(encontrar_motor); then
-        printf 'Bacus-Pkg executable / Ejecutable: %s\n' "$motor"
+        printf 'Bacus-Pkg engine / Motor: %s\n' "$motor"
     else
-        printf '%s\n' \
-            "Bacus-Pkg executable / Ejecutable: not detected / no detectado"
+        printf '%s\n' "Bacus-Pkg engine / Motor: not detected"
     fi
 }
 
-
-# ---------- Responsive bilingual help ----------
+# ---------- Bilingual help ----------
 mostrar_ayuda() {
-    printf '%s\n' \
-        "BACUSP v$VERSION - Bacus-Pkg" \
-        "Gestor / Package Manager" \
-        "=============================="
+    cat <<EOF
+BACUSP v$VERSION - Bacus-Pkg
+Gestor de paquetes / Package manager
 
-    printf '\n%s\n' "USO / USAGE"
-    printf '%s\n' "  bacusp COMANDO [ARGS...]"
+USO / USAGE
+  bacusp COMANDO [ARGUMENTOS]
 
-    printf '\n%s\n' "PAQUETES / PACKAGES"
-    printf '%s\n' \
-        "  install / instalar" \
-        "    Instalar un paquete .bp" \
-        "    Install a .bp package" \
-        "  remove / desinstalar" \
-        "    Eliminar un paquete" \
-        "    Remove a package" \
-        "  purge / purgar" \
-        "    Eliminar paquete y config." \
-        "    Remove package and config." \
-        "  list / listar" \
-        "    Listar paquetes instalados" \
-        "    List installed packages" \
-        "  search / buscar TEXTO" \
-        "    Buscar paquetes / Search" \
-        "  info NOMBRE / NAME" \
-        "    Informacion / Information" \
-        "  deps / dependencias" \
-        "    Consultar dependencias" \
-        "    Inspect dependencies" \
-        "  repo / repositorio" \
-        "    Gestionar repositorios" \
-        "    Manage repositories" \
-        "  upgrade / actualizar" \
-        "    Actualizar paquetes" \
-        "    Upgrade packages"
+PAQUETES / PACKAGES
+  install PAQUETE.bp
+    Instalar un paquete Bacus
+    Install a Bacus package
 
-    printf '\n%s\n' "PAQUETES BP / BP PACKAGES"
-    printf '%s\n' \
-        "  convert / convertir" \
-        "    SOURCE DEST.bp" \
-        "    Crear paquete / Build package" \
-        "  bridge / puente ARCHIVO" \
-        "    Analizar compatibilidad" \
-        "    Analyze compatibility" \
-        "  verify / verificar ARCHIVO.bp" \
-        "    Verificar estructura / Verify"
+  remove NOMBRE
+    Desinstalar un paquete
+    Remove a package
 
-    printf '\n%s\n' "SISTEMA / SYSTEM"
-    printf '%s\n' \
-        "  system / sistema" \
-        "    Informacion del sistema" \
-        "    System information" \
-        "  doctor / diagnostico" \
-        "    Comprobar BACUSP / Diagnose" \
-        "  audit / auditoria" \
-        "    Revisar registros / Audit" \
-        "  version / version-bacus" \
-        "    Version y plataforma / Version"
+  purge NOMBRE
+    Eliminar paquete y configuracion
+    Remove package and configuration
 
-    printf '\n%s\n' "MANTENIMIENTO / MAINTENANCE"
-    printf '%s\n' \
-        "  update / actualizar-bacus" \
-        "    Actualizar Bacus-Pkg / Self-update" \
-        "  clean / limpiar" \
-        "    Limpiar cache / Clean cache" \
-        "  backup / respaldo" \
-        "    Crear copia / Create backup" \
-        "  export / exportar" \
-        "    Exportar datos / Export data" \
-        "  optimize / optimizar" \
-        "    Optimizar / Optimize"
+  list
+    Listar paquetes instalados
+    List installed packages
 
-    printf '\n%s\n' "RED Y COMUNIDAD / NETWORK"
-    printf '%s\n' \
-        "  friends / amigos" \
-        "    Comunidad / Community" \
-        "  speedtest / velocidad" \
-        "    Probar red / Test network"
+  search TEXTO
+    Buscar paquetes
+    Search packages
 
-    printf '\n%s\n' "INTERFAZ / INTERFACE"
-    printf '%s\n' \
-        "  gui / tui / store / tienda" \
-        "    Interfaz de paquetes / Package UI" \
-        "  aliases / alias / atajos" \
-        "    Ver alias / Show aliases"
+  info NOMBRE
+    Mostrar informacion del paquete
+    Show package information
 
-    printf '\n%s\n' "AYUDA / HELP"
-    printf '%s\n' \
-        "  help / ayuda" \
-        "    Mostrar esta ayuda / Show help"
+  deps NOMBRE
+    Consultar dependencias
+    Inspect dependencies
 
-    printf '\n%s\n' "SEGURIDAD / SAFETY"
-    printf '%s\n' \
-        "  Sin fallback a gestores nativos." \
-        "  No native package manager fallback." \
-        "  BP no garantiza compatibilidad" \
-        "  multiplataforma." \
-        "  BP does not guarantee compatibility."
+  repo list|add|remove
+    Gestionar repositorios configurados
+    Manage configured repositories
 
-    printf '\n%s\n' "VARIABLES / ENVIRONMENT"
-    printf '%s\n' \
-        "  BACUSP_HOME" \
-        "  Directorio de datos / Data directory" \
-        "  BACUSP_MODULE_DIR" \
-        "  Directorio de modulos / Module directory" \
-        "  BACUSPKG_BIN" \
-        "  Ruta del motor / Engine path"
+  upgrade
+    Actualizar paquetes instalados
+    Upgrade installed packages
 
-    printf '\n%s\n' "BACUSP v$VERSION"
+FORMATO BP / BP FORMAT
+  convert ARCHIVO
+    Crear ARCHIVO.bp
+    Create ARCHIVO.bp
+
+  convert ORIGEN DESTINO.bp
+    Convertir un archivo al formato BP
+    Convert a file to BP format
+
+  convert --portable ARCHIVO
+    Crear ARCHIVO-portable.bp
+    Create ARCHIVO-portable.bp
+
+  bridge ARCHIVO [PLATAFORMA]
+    Analizar compatibilidad
+    Analyze compatibility
+
+  verify ARCHIVO.bp
+    Verificar el paquete BP
+    Verify a BP package
+
+SISTEMA / SYSTEM
+  system
+    Informacion del sistema
+    System information
+
+  doctor
+    Diagnosticar Bacus-Pkg
+    Diagnose Bacus-Pkg
+
+  audit
+    Revisar registros
+    Review logs
+
+  version
+    Mostrar version y plataforma
+    Show version and platform
+
+MANTENIMIENTO / MAINTENANCE
+  clean
+    Limpiar cache
+    Clean cache
+
+  backup
+    Crear respaldo
+    Create backup
+
+  export
+    Exportar datos
+    Export data
+
+  optimize
+    Optimizar datos
+    Optimize data
+
+INTERFAZ / INTERFACE
+  gui | tui | store
+    Abrir interfaz de paquetes
+    Open package interface
+
+  aliases
+    Mostrar alias disponibles
+    Show available aliases
+
+RED / NETWORK
+  friends
+    Comunidad Bacus
+    Bacus community
+
+  speedtest
+    Probar la red
+    Test network
+
+AYUDA / HELP
+  help
+    Mostrar esta ayuda
+    Show this help
+
+SEGURIDAD / SECURITY
+  Un archivo convertido no garantiza compatibilidad.
+  Conversion does not guarantee compatibility.
+  No se ejecutan scripts externos automaticamente.
+  External scripts are not run automatically.
+
+VARIABLES / ENVIRONMENT
+  BACUSP_HOME
+  BACUSP_MODULE_DIR
+  BACUSPKG_BIN
+EOF
 }
 
 # ---------- Command routing ----------
@@ -333,6 +352,7 @@ case "$ACCION" in
         ;;
 
     system|sistema|fetch|sysinfo)
+        shift
         if [ -f "$MODULE_DIR/fetch.sh" ]; then
             ejecutar_modulo fetch "$@"
         elif [ -f "$MODULE_DIR/sysinfo.sh" ]; then
@@ -470,7 +490,7 @@ case "$ACCION" in
     nuke-native|destruir-nativo|nuke)
         error "This command is disabled."
         warn "Removing native package-management components can break the OS."
-        warn "Eliminarlos puede dañar el sistema operativo."
+        warn "Eliminar componentes nativos puede danar el sistema."
         log_msg "Blocked unsafe native package manager removal request"
         exit 2
         ;;
