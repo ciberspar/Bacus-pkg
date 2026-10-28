@@ -1,0 +1,3 @@
+
+# Bacus-Pkg: identificar los paquetes .bp como datos binarios
+*.bp binary
