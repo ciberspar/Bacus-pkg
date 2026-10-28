@@ -1,0 +1,45 @@
+{
+“name”: “bacus-studio”,
+“displayName”: “%extension.displayName%”,
+“description”: “%extension.description%”,
+“version”: “0.1.0”,
+“publisher”: “ciberspar”,
+“license”: “MIT”,
+“engines”: {
+“vscode”: “^1.85.0”
+},
+“categories”: [
+“Other”
+],
+“main”: “./out/extension.js”,
+“activationEvents”: [
+“onCommand:bacus.createPackage”,
+“onCommand:bacus.validatePackage”,
+“onCommand:bacus.inspectPackage”
+],
+“contributes”: {
+“commands”: [
+{
+“command”: “bacus.createPackage”,
+“title”: “%command.createPackage%”
+},
+{
+“command”: “bacus.validatePackage”,
+“title”: “%command.validatePackage%”
+},
+{
+“command”: “bacus.inspectPackage”,
+“title”: “%command.inspectPackage%”
+}
+]
+},
+“scripts”: {
+“compile”: “tsc -p ./”,
+“vscode:prepublish”: “npm run compile”
+},
+“devDependencies”: {
+“@types/node”: “^20.0.0”,
+“@types/vscode”: “^1.85.0”,
+“typescript”: “^5.0.0”
+}
+}
