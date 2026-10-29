@@ -523,6 +523,11 @@ case "$ACCION" in
         printf '%s\n' "Ejecutá 'bacusp help' o 'bacusp ayuda'."
         exit 2
         ;;
+
+    update|upgrade|actualizar|up|actualizar-bacus|self-update)
+        shift
+        ejecutar_modulo upgrade "$@"
+        ;;
 esac
 
 exit $?
