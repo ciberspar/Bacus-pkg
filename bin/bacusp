@@ -1,7 +1,7 @@
 
 #!/bin/sh
 #
-# BACUSP v7.4 - Modular Package Manager Frontend
+# BACUSP v7.5 - Modular Package Manager Frontend
 # Project: Bacus-Pkg
 # Author: ciberspar
 # Target: ChiquiOS / POSIX-compatible environments
@@ -9,353 +9,197 @@
 #
 
 set -u
+umask 077
 
-VERSION="7.4"
+VERSION="7.5"
 APP="BACUSP"
 
 # ---------- Colors ----------
 if [ -t 1 ]; then
-    VERDE=$(printf '\033[0;32m')
-    AZUL=$(printf '\033[0;34m')
+    GREEN=$(printf '\033[0;32m')
     CYAN=$(printf '\033[0;36m')
-    ROJO=$(printf '\033[0;31m')
-    AMARILLO=$(printf '\033[0;33m')
+    RED=$(printf '\033[0;31m')
+    YELLOW=$(printf '\033[0;33m')
     RESET=$(printf '\033[0m')
 else
-    VERDE=""
-    AZUL=""
+    GREEN=""
     CYAN=""
-    ROJO=""
-    AMARILLO=""
+    RED=""
+    YELLOW=""
     RESET=""
 fi
 
 # ---------- Paths ----------
-BACUSP_HOME="${BACUSP_HOME:-${HOME:-/tmp}/.bacusp}"
+HOME_DIR=${HOME:-/tmp}
+BACUSP_HOME=${BACUSP_HOME:-"$HOME_DIR/.bacusp"}
 CACHE_DIR="$BACUSP_HOME/cache"
 LOG_FILE="$BACUSP_HOME/bacusp.log"
 DB_FILE="$BACUSP_HOME/installed.db"
 
 SCRIPT_DIR=$(
-    CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null &&
+    CDPATH='' cd -P "$(dirname "$0")" 2>/dev/null &&
     pwd -P
 ) || {
     printf '%s\n' "BACUSP: cannot determine script directory." >&2
     exit 1
 }
 
-MODULE_DIR="${BACUSP_MODULE_DIR:-$SCRIPT_DIR/../modules}"
+MODULE_DIR=${BACUSP_MODULE_DIR:-"$SCRIPT_DIR/../modules"}
 
 if ! mkdir -p "$BACUSP_HOME" "$CACHE_DIR"; then
-    printf '%s\n' "BACUSP: cannot create its data directory." >&2
+    printf '%s\n' "BACUSP: cannot create data directory." >&2
     exit 1
 fi
 
-# ---------- Logging ----------
-log_msg() {
-    printf '%s [%s] %s\n' \
-        "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || printf unknown)" \
-        "$APP" "$*" >> "$LOG_FILE" 2>/dev/null || :
-}
-
+# ---------- Messages ----------
 info() {
     printf '%s%s%s\n' "$CYAN" "$*" "$RESET"
 }
 
 success() {
-    printf '%s%s%s\n' "$VERDE" "$*" "$RESET"
+    printf '%s%s%s\n' "$GREEN" "$*" "$RESET"
 }
 
 warn() {
-    printf '%s%s%s\n' "$AMARILLO" "$*" "$RESET" >&2
+    printf '%s%s%s\n' "$YELLOW" "$*" "$RESET" >&2
 }
 
 error() {
-    printf '%s%s%s\n' "$ROJO" "$*" "$RESET" >&2
+    printf '%s%s%s\n' "$RED" "$*" "$RESET" >&2
+}
+
+# ---------- Logging ----------
+log_msg() {
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || printf '%s' unknown)
+    printf '%s [%s] %s\n' "$timestamp" "$APP" "$*" \
+        >> "$LOG_FILE" 2>/dev/null || :
 }
 
 # ---------- Platform detection ----------
-detectar_entorno() {
-    OS_NAME=$(uname -s 2>/dev/null || printf unknown)
+detect_platform() {
+    os_name=$(uname -s 2>/dev/null || printf '%s' unknown)
 
-    case "$OS_NAME" in
+    case "$os_name" in
         Linux)
             if [ -n "${TERMUX_VERSION:-}" ] ||
-               { [ -n "${PREFIX:-}" ] && [ -x "${PREFIX}/bin/pkg" ]; }
-            then
-                printf '%s\n' "termux"
+               { [ -n "${PREFIX:-}" ] &&
+                 [ -x "${PREFIX}/bin/pkg" ]; }; then
+                printf '%s\n' termux
                 return
             fi
 
             if [ -r /etc/os-release ]; then
-                ID=""
-                ID_LIKE=""
+                system_id=""
+                system_like=""
+
                 # shellcheck disable=SC1091
                 . /etc/os-release
 
-                case "${ID:-}" in
-                    debian) printf '%s\n' "debian"; return ;;
-                    ubuntu) printf '%s\n' "ubuntu"; return ;;
-                    arch) printf '%s\n' "arch"; return ;;
-                    fedora) printf '%s\n' "fedora"; return ;;
-                    opensuse*|opensuse-tumbleweed|opensuse-leap)
-                        printf '%s\n' "opensuse"
+                system_id=${ID:-}
+                system_like=${ID_LIKE:-}
+
+                case "$system_id" in
+                    debian) printf '%s\n' debian; return ;;
+                    ubuntu) printf '%s\n' ubuntu; return ;;
+                    arch) printf '%s\n' arch; return ;;
+                    fedora) printf '%s\n' fedora; return ;;
+                    opensuse*|suse)
+                        printf '%s\n' opensuse
                         return
                         ;;
-                    alpine) printf '%s\n' "alpine"; return ;;
+                    alpine) printf '%s\n' alpine; return ;;
                 esac
 
-                case " ${ID_LIKE:-} " in
-                    *" debian "*) printf '%s\n' "debian-like"; return ;;
-                    *" arch "*) printf '%s\n' "arch-like"; return ;;
-                    *" fedora "*) printf '%s\n' "fedora-like"; return ;;
+                case " $system_like " in
+                    *" debian "*)
+                        printf '%s\n' debian-like
+                        return
+                        ;;
+                    *" arch "*)
+                        printf '%s\n' arch-like
+                        return
+                        ;;
+                    *" fedora "*)
+                        printf '%s\n' fedora-like
+                        return
+                        ;;
                 esac
             fi
 
-            printf '%s\n' "linux-unknown"
+            printf '%s\n' linux-unknown
             ;;
-        Darwin)  printf '%s\n' "darwin" ;;
-        FreeBSD) printf '%s\n' "freebsd" ;;
-        OpenBSD) printf '%s\n' "openbsd" ;;
-        NetBSD)  printf '%s\n' "netbsd" ;;
-        GNU)     printf '%s\n' "hurd" ;;
-        Haiku)   printf '%s\n' "haiku" ;;
-        *)
-            printf '%s\n' "posix-unknown"
-            ;;
+        Darwin)  printf '%s\n' darwin ;;
+        FreeBSD) printf '%s\n' freebsd ;;
+        OpenBSD) printf '%s\n' openbsd ;;
+        NetBSD)  printf '%s\n' netbsd ;;
+        GNU)     printf '%s\n' hurd ;;
+        Haiku)   printf '%s\n' haiku ;;
+        *)       printf '%s\n' posix-unknown ;;
     esac
 }
 
-ENTORNO=$(detectar_entorno)
+PLATFORM=$(detect_platform)
 
-# ---------- Engine discovery ----------
-BACUSPKG_BIN="${BACUSPKG_BIN:-}"
-
-encontrar_motor() {
-    if [ -n "$BACUSPKG_BIN" ]; then
-        if [ -x "$BACUSPKG_BIN" ] && [ ! -d "$BACUSPKG_BIN" ]; then
-            printf '%s\n' "$BACUSPKG_BIN"
-            return 0
-        fi
-        return 1
-    fi
-
-    for candidate in \
-        "$SCRIPT_DIR/bacus-pkg" \
-        "$SCRIPT_DIR/bacuspkg" \
-        "$SCRIPT_DIR/../bacus-pkg/bin/bacus-pkg"
-    do
-        if [ -x "$candidate" ] && [ ! -d "$candidate" ]; then
-            printf '%s\n' "$candidate"
-            return 0
-        fi
-    done
-
-    command -v bacus-pkg 2>/dev/null
-}
-
-# ---------- Module dispatcher ----------
-ejecutar_modulo() {
-    modulo=$1
-    shift
-
-    archivo="$MODULE_DIR/$modulo.sh"
-
-    if [ ! -f "$archivo" ]; then
-        error "Module not found / Módulo no encontrado: $modulo"
-        warn "Ruta esperada / Expected path: $archivo"
-        log_msg "Missing module: $modulo"
-        return 2
-    fi
-
-    if [ ! -r "$archivo" ]; then
-        error "Module is not readable / Módulo no legible: $modulo"
-        log_msg "Unreadable module: $modulo"
-        return 2
-    fi
-
-    log_msg "Running module=$modulo platform=$ENTORNO"
-
-    # Los módulos se ejecutan con sh para no depender de chmod.
-    sh "$archivo" "$@"
-    resultado=$?
-
-    if [ "$resultado" -eq 0 ]; then
-        log_msg "Module completed: $modulo"
-    else
-        log_msg "Module failed: $modulo exit=$resultado"
-    fi
-
-    return "$resultado"
-}
-
-# ---------- System information ----------
-mostrar_sistema() {
-    printf '\n%s\n' "BACUSP v$VERSION"
-    printf '%s\n' "----------------------------------------"
-    printf 'Platform / Plataforma: %s\n' "$ENTORNO"
-    printf 'Architecture / Arquitectura: %s\n' \
-        "$(uname -m 2>/dev/null || printf unknown)"
-    printf 'Kernel / Núcleo: %s\n' \
-        "$(uname -r 2>/dev/null || printf unknown)"
-    printf 'Module directory / Módulos: %s\n' "$MODULE_DIR"
-    printf 'Data directory / Datos: %s\n' "$BACUSP_HOME"
-    printf 'Cache: %s\n' "$CACHE_DIR"
-    printf 'Database / Base de datos: %s\n' "$DB_FILE"
-
-    if motor=$(encontrar_motor); then
-        printf 'Bacus-Pkg engine / Motor: %s\n' "$motor"
-    else
-        printf '%s\n' "Bacus-Pkg engine / Motor: not detected"
-    fi
-}
-
-# ---------- Bilingual help ----------
-mostrar_ayuda() {
-    cat <<EOF
-BACUSP v$VERSION - Bacus-Pkg
+# ---------- Help ----------
+show_help() {
+    cat <<'EOF'
+BACUSP - Bacus-Pkg
 Gestor modular de paquetes / Modular package manager
 
 USO / USAGE
   bacusp COMANDO [ARGUMENTOS]
-  bacusp help
-  bacusp version
 
 PAQUETES / PACKAGES
-  install ARCHIVO.bp
-    Instalar un paquete BP
-    Install a BP package
+  install ARCHIVO.bp       Instalar paquete BP / Install BP package
+  install ARCHIVO.deb      Instalar paquete nativo / Install native package
+  remove NOMBRE            Desinstalar / Remove
+  purge NOMBRE             Eliminar datos / Purge
+  list                     Listar instalados / List installed
+  search TEXTO             Buscar paquetes / Search packages
+  info NOMBRE              Información / Package information
+  deps NOMBRE              Dependencias / Dependencies
 
-  install ARCHIVO.deb|.rpm|.apk
-    Usar el gestor nativo compatible
-    Use the compatible native package manager
-
-  remove NOMBRE
-    Desinstalar un paquete
-    Remove a package
-
-  purge NOMBRE
-    Eliminar paquete y configuración
-    Remove package and configuration
-
-  list
-    Listar paquetes instalados
-    List installed packages
-
-  search TEXTO
-    Buscar paquetes
-    Search packages
-
-  info NOMBRE
-    Mostrar información del paquete
-    Show package information
-
-  deps NOMBRE
-    Consultar dependencias
-    Inspect dependencies
-
-  repo list|add|remove
-    Gestionar repositorios
-    Manage repositories
-
-ACTUALIZACIONES / UPDATES
-  update [--lang es|en]
-    Abrir el centro TUI de actualizaciones
-    Open the update TUI
-
-  upgrade
-    Alias de update
-    Alias for update
+REPOSITORIOS / REPOSITORIES
+  repo list                Listar repositorios / List repositories
+  repo add URL             Añadir repositorio / Add repository
+  repo remove URL          Quitar repositorio / Remove repository
 
 FORMATO BP / BP FORMAT
-  convert ORIGEN
-    Crear un archivo .bp
-    Create a .bp file
+  convert ORIGEN [DESTINO.bp]  Convertir o empaquetar / Convert or package
+  verify ARCHIVO.bp            Verificar estructura e integridad / Verify integrity
+  bridge ARCHIVO [PLATAFORMA]  Analizar compatibilidad / Analyze compatibility
 
-  convert ORIGEN DESTINO.bp
-    Empaquetar un archivo como BP
-    Package one file as BP
+ACTUALIZACIONES / UPDATES
+  update                   Centro de actualización / Update center
+  upgrade                  Alias de update / Alias for update
 
-  convert --portable ORIGEN [DESTINO.bp]
-    Crear un paquete marcado como portable
-    Create a package marked as portable
-
-  verify ARCHIVO.bp
-    Validar estructura e integridad SHA-256
-    Validate structure and SHA-256 integrity
-
-  bridge ARCHIVO [PLATAFORMA]
-    Analizar compatibilidad
-    Analyze compatibility
+TIENDA / STORE
+  store                    Abrir tienda de terminal / Open terminal store
+  tui                      Alias de store / Alias for store
+  gui                      Abrir interfaz disponible / Open available interface
 
 MANTENIMIENTO / MAINTENANCE
-  clean
-    Limpiar caché de Bacus-Pkg
-    Clean the Bacus-Pkg cache
-
-  backup
-    Crear respaldo
-    Create a backup
-
-  export
-    Exportar datos
-    Export data
-
-  optimize
-    Optimizar datos locales
-    Optimize local data
-
-SISTEMA / SYSTEM
-  system
-    Mostrar información del sistema
-    Show system information
-
-  doctor
-    Diagnosticar Bacus-Pkg
-    Diagnose Bacus-Pkg
-
-  audit
-    Revisar registros
-    Review logs
-
-  version
-    Mostrar versión y plataforma
-    Show version and platform
-
-INTERFAZ / INTERFACE
-  gui | tui | store
-    Abrir la interfaz disponible
-    Open the available interface
-
-  aliases
-    Mostrar alias disponibles
-    Show available aliases
-
-RED / NETWORK
-  friends
-    Comunidad Bacus
-    Bacus community
-
-  speedtest
-    Probar la red
-    Test network
+  clean                    Limpiar caché / Clean cache
+  backup                   Crear respaldo / Create backup
+  export                   Exportar datos / Export data
+  optimize                 Optimizar datos / Optimize data
+  doctor                   Diagnosticar / Diagnose
+  audit                    Revisar registros / Review logs
+  system                   Información del sistema / System information
+  aliases                  Mostrar alias / Show aliases
+  friends                  Comunidad / Community
+  speedtest                Probar red / Test network
 
 AYUDA / HELP
-  help | ayuda
-    Mostrar esta ayuda
-    Show this help
+  help                     Mostrar ayuda / Show help
+  version                  Versión y plataforma / Version and platform
 
 SEGURIDAD / SECURITY
-  verify comprueba estructura e integridad, no malware.
-  verify checks structure and integrity, not malware.
+  verify comprueba estructura e integridad, no garantiza que
+  un paquete sea seguro ni que esté libre de malware.
 
-  convert empaqueta el archivo original; no lo transforma
-  automáticamente en una aplicación nativa.
-  convert wraps the original file; it does not automatically
-  transform it into a native application.
-
-  Las actualizaciones del sistema requieren confirmación.
-  System updates require confirmation.
+  verify checks structure and integrity; it does not guarantee
+  that a package is safe or malware-free.
 
 VARIABLES / ENVIRONMENT
   BACUSP_HOME
@@ -365,168 +209,225 @@ VARIABLES / ENVIRONMENT
 EOF
 }
 
-# ---------- Command routing ----------
-ACCION=${1:-help}
+# ---------- System information ----------
+show_system() {
+    printf '\nBACUSP v%s\n' "$VERSION"
+    printf '%s\n' '----------------------------------------'
+    printf 'Platform / Plataforma: %s\n' "$PLATFORM"
+    printf 'Architecture / Arquitectura: %s\n' \
+        "$(uname -m 2>/dev/null || printf '%s' unknown)"
+    printf 'Kernel / Núcleo: %s\n' \
+        "$(uname -r 2>/dev/null || printf '%s' unknown)"
+    printf 'Module directory / Módulos: %s\n' "$MODULE_DIR"
+    printf 'Data directory / Datos: %s\n' "$BACUSP_HOME"
+    printf 'Cache: %s\n' "$CACHE_DIR"
+    printf 'Database / Base de datos: %s\n' "$DB_FILE"
 
-case "$ACCION" in
-    help|ayuda|-h|--help|h)
-        mostrar_ayuda
+    if [ -n "${BACUSPKG_BIN:-}" ]; then
+        printf 'Engine override / Motor configurado: %s\n' "$BACUSPKG_BIN"
+    else
+        printf '%s\n' 'Engine / Motor: modular shell frontend'
+    fi
+}
+
+# ---------- Module dispatcher ----------
+run_module() {
+    module=$1
+    shift
+
+    # Only fixed module names from the command router should reach here.
+    case "$module" in
+        install|remove|purge|list|search|info|deps|repo|update|convert|bridge|verify|doctor|audit|clean|backup|export|optimize|friends|aliases|speedtest|fetch|sysinfo|store_gui|store_tui|gui)
+            ;;
+        *)
+            error "Invalid module name / Nombre de módulo inválido"
+            return 2
+            ;;
+    esac
+
+    module_file="$MODULE_DIR/$module.sh"
+
+    if [ ! -f "$module_file" ] || [ ! -r "$module_file" ]; then
+        error "Module not found or unreadable / Módulo no encontrado o ilegible: $module"
+        warn "Expected path / Ruta esperada: $module_file"
+        log_msg "Missing or unreadable module: $module"
+        return 2
+    fi
+
+    log_msg "Running module=$module platform=$PLATFORM"
+
+    # Modules execute in a separate shell process.
+    sh "$module_file" "$@"
+    result=$?
+
+    if [ "$result" -eq 0 ]; then
+        log_msg "Module completed: $module"
+    else
+        log_msg "Module failed: $module exit=$result"
+    fi
+
+    return "$result"
+}
+
+# ---------- Command router ----------
+COMMAND=${1:-help}
+
+case "$COMMAND" in
+    help|ayuda|-h|--help)
+        show_help
         ;;
 
-    version|version-bacus|--version|-V)
-        mostrar_sistema
+    version|--version|-V)
+        show_system
         ;;
 
     system|sistema|fetch|sysinfo)
         shift
         if [ -f "$MODULE_DIR/fetch.sh" ]; then
-            ejecutar_modulo fetch "$@"
+            run_module fetch "$@"
         elif [ -f "$MODULE_DIR/sysinfo.sh" ]; then
-            ejecutar_modulo sysinfo "$@"
+            run_module sysinfo "$@"
         else
-            mostrar_sistema
+            show_system
         fi
         ;;
 
     install|instalar|i)
         shift
-        ejecutar_modulo install "$@"
+        run_module install "$@"
         ;;
 
     remove|borrar|desinstalar|rm)
         shift
-        ejecutar_modulo remove "$@"
+        run_module remove "$@"
         ;;
 
     purge|purgar)
         shift
-        ejecutar_modulo purge "$@"
+        run_module purge "$@"
         ;;
 
     list|listar|ls)
         shift
-        ejecutar_modulo list "$@"
+        run_module list "$@"
         ;;
 
     search|buscar|s)
         shift
-        ejecutar_modulo search "$@"
+        run_module search "$@"
         ;;
 
     info|informacion|información|detalles)
         shift
-        ejecutar_modulo info "$@"
+        run_module info "$@"
         ;;
 
     deps|dependencias|depend)
         shift
-        ejecutar_modulo deps "$@"
+        run_module deps "$@"
         ;;
 
     repo|repositorio|repos)
         shift
-        ejecutar_modulo repo "$@"
+        run_module repo "$@"
         ;;
 
-    # Both commands use the interactive update center.
-    # This avoids invoking an older, potentially unsafe upgrade script.
-    upgrade|actualizar|up|update|actualizar-bacus|self-update)
+    update|upgrade|actualizar|actualizar-bacus|up)
         shift
-        ejecutar_modulo update "$@"
+        run_module update "$@"
         ;;
 
     convert|convertir|conv)
         shift
-        ejecutar_modulo convert "$@"
+        run_module convert "$@"
         ;;
 
     bridge|puente)
         shift
-        ejecutar_modulo bridge "$@"
+        run_module bridge "$@"
         ;;
 
     verify|verificar|check)
         shift
-        ejecutar_modulo verify "$@"
+        run_module verify "$@"
         ;;
 
     doctor|salud|diagnostico|diagnóstico)
         shift
-        ejecutar_modulo doctor "$@"
+        run_module doctor "$@"
         ;;
 
     audit|auditar|auditoria|auditoría)
         shift
-        ejecutar_modulo audit "$@"
+        run_module audit "$@"
         ;;
 
     clean|limpiar|cleanup)
         shift
-        ejecutar_modulo clean "$@"
+        run_module clean "$@"
         ;;
 
     backup|respaldo|copia)
         shift
-        ejecutar_modulo backup "$@"
+        run_module backup "$@"
         ;;
 
     export|exportar)
         shift
-        ejecutar_modulo export "$@"
+        run_module export "$@"
         ;;
 
     optimize|optimizar)
         shift
-        ejecutar_modulo optimize "$@"
+        run_module optimize "$@"
         ;;
 
     friends|amigos|comunidad)
         shift
-        ejecutar_modulo friends "$@"
+        run_module friends "$@"
         ;;
 
     aliases|alias|atajos)
         shift
-        ejecutar_modulo aliases "$@"
+        run_module aliases "$@"
         ;;
 
     gui|tui|store|tienda|tienda-gui|interfaz)
         shift
-        if [ -f "$MODULE_DIR/store_tui.sh" ]; then
-            ejecutar_modulo store_tui "$@"
+
+        # Prefer the original module name used in this repository.
+        if [ -f "$MODULE_DIR/store_gui.sh" ]; then
+            run_module store_gui "$@"
+        elif [ -f "$MODULE_DIR/store_tui.sh" ]; then
+            run_module store_tui "$@"
         elif [ -f "$MODULE_DIR/storegui.sh" ]; then
-            ejecutar_modulo storegui "$@"
+            run_module storegui "$@"
         elif [ -f "$MODULE_DIR/gui.sh" ]; then
-            ejecutar_modulo gui "$@"
+            run_module gui "$@"
         else
             error "No package interface module is installed."
-            error "No hay un módulo de interfaz instalado."
+            error "No hay un módulo de tienda instalado."
             exit 2
         fi
         ;;
 
     speedtest|velocidad|test-red)
         shift
-        ejecutar_modulo speedtest "$@"
+        run_module speedtest "$@"
         ;;
 
-    nuke-native|destruir-nativo|nuke)
-        error "This command is disabled."
-        warn "Removing native package managers can break the OS."
+    nuke|nuke-native|destruir-nativo)
+        error "This command is disabled / Este comando está deshabilitado."
+        warn "Removing native package managers can break the operating system."
         warn "Eliminar gestores nativos puede dañar el sistema."
         log_msg "Blocked native package manager removal request"
         exit 2
         ;;
 
     *)
-        error "Unknown command / Comando desconocido: $ACCION"
-        printf '%s\n' "Ejecutá 'bacusp help' o 'bacusp ayuda'."
+        error "Unknown command / Comando desconocido: $COMMAND"
+        printf '%s\n' "Usá 'bacusp help' / Use 'bacusp help'."
         exit 2
-        ;;
-
-    update|upgrade|actualizar|up|actualizar-bacus|self-update)
-        shift
-        ejecutar_modulo upgrade "$@"
         ;;
 esac
 
