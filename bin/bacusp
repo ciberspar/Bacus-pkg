@@ -1,4 +1,3 @@
-
 #!/bin/sh
 #
 # BACUSP v7.5 - Modular Package Manager Frontend
@@ -35,6 +34,23 @@ BACUSP_HOME=${BACUSP_HOME:-"$HOME_DIR/.bacusp"}
 CACHE_DIR="$BACUSP_HOME/cache"
 LOG_FILE="$BACUSP_HOME/bacusp.log"
 DB_FILE="$BACUSP_HOME/installed.db"
+
+resolve_lang() {
+    locale="${BACUSP_LANG:-${LANG:-${LC_ALL:-}}}"
+    case "${locale%%.*}" in
+        en|en_US|en_GB|en_AU|C|POSIX)
+            printf '%s\n' "en"
+            ;;
+        es|es_ES|es_MX|es_AR|es_CL|es_CO|es_PE|es_UY|es_GT)
+            printf '%s\n' "es"
+            ;;
+        *)
+            printf '%s\n' "en"
+            ;;
+    esac
+}
+
+BACUSP_LANG=$(resolve_lang)
 
 SCRIPT_DIR=$(
     CDPATH='' cd -P "$(dirname "$0")" 2>/dev/null &&
@@ -111,15 +127,15 @@ detect_platform() {
                 esac
 
                 case " $system_like " in
-                    *" debian "*)
+                    *" debian ")
                         printf '%s\n' debian-like
                         return
                         ;;
-                    *" arch "*)
+                    *" arch ")
                         printf '%s\n' arch-like
                         return
                         ;;
-                    *" fedora "*)
+                    *" fedora ")
                         printf '%s\n' fedora-like
                         return
                         ;;
@@ -235,7 +251,6 @@ run_module() {
     module=$1
     shift
 
-    # Only fixed module names from the command router should reach here.
     case "$module" in
         install|remove|purge|list|search|info|deps|repo|update|convert|bridge|verify|doctor|audit|clean|backup|export|optimize|friends|aliases|speedtest|fetch|sysinfo|store_gui|store_tui|gui)
             ;;
@@ -256,7 +271,6 @@ run_module() {
 
     log_msg "Running module=$module platform=$PLATFORM"
 
-    # Modules execute in a separate shell process.
     sh "$module_file" "$@"
     result=$?
 
@@ -269,7 +283,6 @@ run_module() {
     return "$result"
 }
 
-# ---------- Command router ----------
 COMMAND=${1:-help}
 
 case "$COMMAND" in
@@ -394,8 +407,6 @@ case "$COMMAND" in
 
     gui|tui|store|tienda|tienda-gui|interfaz)
         shift
-
-        # Prefer the original module name used in this repository.
         if [ -f "$MODULE_DIR/store_gui.sh" ]; then
             run_module store_gui "$@"
         elif [ -f "$MODULE_DIR/store_tui.sh" ]; then

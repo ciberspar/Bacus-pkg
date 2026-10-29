@@ -1,4 +1,3 @@
-
 #!/bin/sh
 #
 # BACUSP - Universal Package Installer
@@ -10,6 +9,23 @@
 
 set -eu
 umask 077
+
+resolve_lang() {
+    locale="${BACUSP_LANG:-${LANG:-${LC_ALL:-}}}"
+    case "${locale%%.*}" in
+        en|en_US|en_GB|en_AU|C|POSIX)
+            printf '%s\n' "en"
+            ;;
+        es|es_ES|es_MX|es_AR|es_CL|es_CO|es_PE|es_UY|es_GT)
+            printf '%s\n' "es"
+            ;;
+        *)
+            printf '%s\n' "en"
+            ;;
+    esac
+}
+
+BACUSP_LANG=$(resolve_lang)
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 VERIFY="$SCRIPT_DIR/verify.sh"
@@ -58,10 +74,6 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 1
 fi
 
-# --------------------------------------------------
-# 1. Install BP v1 packages
-# --------------------------------------------------
-
 case "$INPUT" in
     *.bp)
         if [ ! -f "$INPUT" ] || [ -L "$INPUT" ]; then
@@ -74,7 +86,6 @@ case "$INPUT" in
             exit 1
         fi
 
-        # Verify the package before extracting anything.
         if ! sh "$VERIFY" "$INPUT"; then
             error "el paquete BP no pasó la verificación"
             exit 1
@@ -164,7 +175,6 @@ def parse_manifest(data):
         except (UnicodeDecodeError, ValueError):
             fail("valor de manifiesto inválido")
 
-        # Reject malformed percent escapes.
         if re.search(r"%(?![0-9A-Fa-f]{2})", value):
             fail("escape porcentual inválido")
 
@@ -287,7 +297,6 @@ def main():
             next_offset = 0
             seen = set()
 
-            # Bound the number of records by the table's actual size.
             if count > tsize // (ENTRY.size + 1):
                 fail("cantidad de entradas inválida")
 
@@ -335,7 +344,6 @@ def main():
             if table_used != tsize or next_offset != psize:
                 fail("tabla o payload inconsistente")
 
-            # Reject file/directory path conflicts before extraction.
             kinds = {path: kind for path, kind, *_ in records}
 
             for path, kind, *_ in records:
@@ -406,11 +414,6 @@ except (OSError, OverflowError, struct.error, ValueError) as exc:
 PY
         ;;
 esac
-
-# --------------------------------------------------
-# 2. Native package installation
-# These formats may modify the operating system.
-# --------------------------------------------------
 
 is_root() {
     [ "$(id -u)" -eq 0 ]
@@ -519,10 +522,6 @@ case "$INPUT" in
         ;;
 esac
 
-# --------------------------------------------------
-# 3. Install by package name using system manager
-# --------------------------------------------------
-
 case "$INPUT" in
     */*|*://*)
         error "indica un nombre de paquete o archivo local"
@@ -530,7 +529,6 @@ case "$INPUT" in
         ;;
 esac
 
-# Termux
 if [ -n "${PREFIX:-}" ] && [ -x "${PREFIX}/bin/pkg" ]; then
     exec "${PREFIX}/bin/pkg" install "$INPUT"
 fi

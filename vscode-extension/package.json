@@ -1,4 +1,3 @@
-
 {
   "name": "bacus-studio",
   "displayName": "%extension.displayName%",
@@ -20,15 +19,15 @@
     "commands": [
       {
         "command": "bacus.createPackage",
-        "title": "Bacus: Crear paquete"
+        "title": "%command.createPackage%"
       },
       {
         "command": "bacus.validatePackage",
-        "title": "Bacus: Validar paquete"
+        "title": "%command.validatePackage%"
       },
       {
         "command": "bacus.inspectPackage",
-        "title": "Bacus: Inspeccionar paquete"
+        "title": "%command.inspectPackage%"
       }
     ]
   },

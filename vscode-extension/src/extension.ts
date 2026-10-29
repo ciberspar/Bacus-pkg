@@ -1,4 +1,3 @@
-
 import * as vscode from "vscode";
 import * as path from "path";
 
@@ -7,6 +6,13 @@ const MAGIC = Buffer.from("BACUSBP1", "ascii");
 type PackageEntry = {
   path: string;
   size: number;
+};
+
+type TemplateOption = {
+  label: string;
+  description: string;
+  value: string;
+  defaultFiles: string;
 };
 
 function joinBytes(parts: Uint8Array[]): Buffer {
@@ -56,9 +62,7 @@ async function readProjectFiles(
       continue;
     }
 
-    const relativePath = relative
-      ? `${relative}/${name}`
-      : name;
+    const relativePath = relative ? `${relative}/${name}` : name;
 
     if (!safeRelativePath(relativePath)) {
       continue;
@@ -70,28 +74,14 @@ async function readProjectFiles(
       result.push(...await readProjectFiles(root, relativePath));
     } else if (type === vscode.FileType.File) {
       const data = await vscode.workspace.fs.readFile(uri);
-
-      result.push({
-        path: relativePath,
-        data: Buffer.from(data)
-      });
+      result.push({ path: relativePath, data: Buffer.from(data) });
     }
   }
 
   return result;
 }
 
-/*
- * BACUSBP1 binary format:
- *
- * 8 bytes: magic "BACUSBP1"
- * 4 bytes: JSON manifest length (unsigned big-endian)
- * N bytes: JSON manifest
- * Remaining: concatenated file contents in manifest order
- */
-function buildBinaryPackage(
-  files: { path: string; data: Buffer }[]
-): Buffer {
+function buildBinaryPackage(files: { path: string; data: Buffer }[]): Buffer {
   const entries: PackageEntry[] = files.map(file => ({
     path: file.path,
     size: file.data.length
@@ -121,10 +111,7 @@ function parseBinaryPackage(data: Buffer): {
   entries: PackageEntry[];
   payloadOffset: number;
 } {
-  if (
-    data.length < 12 ||
-    !data.subarray(0, 8).equals(MAGIC)
-  ) {
+  if (data.length < 12 || !data.subarray(0, 8).equals(MAGIC)) {
     throw new Error("No es un paquete BACUSBP1 reconocido.");
   }
 
@@ -132,10 +119,7 @@ function parseBinaryPackage(data: Buffer): {
   const manifestStart = 12;
   const payloadOffset = manifestStart + manifestLength;
 
-  if (
-    manifestLength === 0 ||
-    payloadOffset > data.length
-  ) {
+  if (manifestLength === 0 || payloadOffset > data.length) {
     throw new Error("El manifiesto binario está incompleto.");
   }
 
@@ -226,61 +210,147 @@ async function chooseBpFile(): Promise<vscode.Uri | undefined> {
   return files?.[0];
 }
 
+const templates: Record<string, TemplateOption[]> = {
+  python: [
+    {
+      label: "CLI simple",
+      description: "Aplicación de consola con punto de entrada",
+      value: "cli",
+      defaultFiles: "src/main.py,README.md,assets/"
+    },
+    {
+      label: "Servicio / módulo",
+      description: "Proyecto modular para lógica reusable",
+      value: "module",
+      defaultFiles: "src/app.py,src/core.py,README.md"
+    }
+  ],
+  c: [
+    {
+      label: "CLI console",
+      description: "Programa en C con main()",
+      value: "cli",
+      defaultFiles: "src/main.c,README.md,assets/"
+    }
+  ],
+  cpp: [
+    {
+      label: "CLI console",
+      description: "Programa en C++ con main()",
+      value: "cli",
+      defaultFiles: "src/main.cpp,README.md,assets/"
+    }
+  ],
+  javascript: [
+    {
+      label: "Script de nodo",
+      description: "Proyecto JavaScript estándar",
+      value: "cli",
+      defaultFiles: "src/main.js,README.md,assets/"
+    }
+  ],
+  typescript: [
+    {
+      label: "Proyecto TS",
+      description: "Aplicación TypeScript con configuración básica",
+      value: "cli",
+      defaultFiles: "src/main.ts,README.md,assets/"
+    }
+  ],
+  web: [
+    {
+      label: "Web app",
+      description: "HTML + CSS + JavaScript",
+      value: "web",
+      defaultFiles: "index.html,style.css,script.js,README.md,assets/"
+    }
+  ],
+  shell: [
+    {
+      label: "CLI shell",
+      description: "Script POSIX con interfaz de consola",
+      value: "cli",
+      defaultFiles: "src/main.sh,README.md,assets/"
+    }
+  ],
+  other: [
+    {
+      label: "Personalizado",
+      description: "Elegir tus propios archivos y carpetas",
+      value: "custom",
+      defaultFiles: "README.md,assets/"
+    }
+  ]
+};
+
 async function createPackageProject(): Promise<void> {
+  const language = await vscode.window.showQuickPick(
+    [
+      { label: "Python", description: ".py", value: "python" },
+      { label: "C", description: ".c, .h", value: "c" },
+      { label: "C++", description: ".cpp, .hpp", value: "cpp" },
+      { label: "JavaScript", description: ".js", value: "javascript" },
+      { label: "TypeScript", description: ".ts", value: "typescript" },
+      { label: "Web", description: "HTML + CSS + JavaScript", value: "web" },
+      { label: "Shell", description: ".sh", value: "shell" },
+      { label: "Otro / Other", description: "Archivos personalizados", value: "other" }
+    ],
+    {
+      title: "Bacus Studio — Paso 1 de 5",
+      placeHolder: "Elegí el lenguaje / Choose a language",
+      ignoreFocusOut: true
+    }
+  );
+
+  if (!language) {
+    return;
+  }
+
+  const template = await vscode.window.showQuickPick(
+    templates[language.value] ?? templates.other,
+    {
+      title: "Bacus Studio — Paso 2 de 5",
+      placeHolder: "Elegí una plantilla / Choose a template",
+      ignoreFocusOut: true
+    }
+  );
+
+  if (!template) {
+    return;
+  }
+
   const name = await vscode.window.showInputBox({
-    title: "Bacus Studio — Paso 1 de 3",
+    title: "Bacus Studio — Paso 3 de 5",
     prompt: "Nombre del proyecto / Project name",
-    placeHolder: "Perritos",
+    placeHolder: "mi-proyecto",
+    value: "bacus-app",
     validateInput: value => {
       if (!value.trim()) {
-        return "Escribí un nombre.";
+        return "Escribí un nombre válido.";
       }
 
       return /^[a-zA-Z0-9._+-]+$/.test(value)
         ? null
         : "Usá letras, números, puntos, guiones o guiones bajos.";
-    }
+    },
+    ignoreFocusOut: true
   });
 
-  if (!name) return;
-
-  const languages = [
-    { label: "Python", description: ".py", value: "python" },
-    { label: "C", description: ".c, .h", value: "c" },
-    { label: "C++", description: ".cpp, .hpp", value: "cpp" },
-    { label: "JavaScript", description: ".js", value: "javascript" },
-    { label: "TypeScript", description: ".ts", value: "typescript" },
-    { label: "HTML + CSS + JavaScript", description: "Web", value: "web" },
-    { label: "Shell", description: ".sh", value: "shell" },
-    { label: "Otro / Other", description: "Archivos personalizados", value: "other" }
-  ];
-
-  const language = await vscode.window.showQuickPick(languages, {
-    title: "Bacus Studio — Paso 2 de 3",
-    placeHolder: "Elegí el lenguaje / Choose a language"
-  });
-
-  if (!language) return;
-
-  const defaults: Record<string, string> = {
-    python: "src/main.py,README.md,assets/",
-    c: "src/main.c,README.md,assets/",
-    cpp: "src/main.cpp,README.md,assets/",
-    javascript: "src/main.js,README.md,assets/",
-    typescript: "src/main.ts,README.md,assets/",
-    web: "index.html,style.css,script.js,README.md,assets/",
-    shell: "src/main.sh,README.md,assets/",
-    other: "README.md,assets/"
-  };
+  if (!name) {
+    return;
+  }
 
   const filesInput = await vscode.window.showInputBox({
-    title: "Bacus Studio — Paso 3 de 3",
-    prompt: "Archivos y carpetas separados por comas",
-    value: defaults[language.value],
-    placeHolder: "src/main.py,assets/,README.md"
+    title: "Bacus Studio — Paso 4 de 5",
+    prompt: "Archivos y carpetas separados por comas / Files and folders separated by commas",
+    value: template.defaultFiles,
+    placeHolder: "src/main.py,README.md,assets/",
+    ignoreFocusOut: true
   });
 
-  if (filesInput === undefined) return;
+  if (filesInput === undefined) {
+    return;
+  }
 
   const selected = filesInput
     .split(",")
@@ -312,7 +382,9 @@ async function createPackageProject(): Promise<void> {
   }
 
   const parent = await chooseFolder();
-  if (!parent) return;
+  if (!parent) {
+    return;
+  }
 
   const root = vscode.Uri.joinPath(parent, name);
 
@@ -351,22 +423,31 @@ async function createPackageProject(): Promise<void> {
       }
 
       if (isFolder) {
-        await vscode.workspace.fs.createDirectory(
-          vscode.Uri.joinPath(current, fileName)
-        );
+        await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(current, fileName));
         continue;
       }
 
       let content = "";
 
       if (relative === "README.md") {
-        content = `# ${name}\n\nCreated with Bacus Studio.\n`;
+        content = [
+          `# ${name}`,
+          "",
+          "## Spanish",
+          "",
+          `Este proyecto fue creado con Bacus Studio y listo para empaquetarse como .bp.`,
+          "",
+          "## English",
+          "",
+          `This project was created with Bacus Studio and is ready to be packaged as a .bp file.`,
+          ""
+        ].join("\n");
       } else if (relative.endsWith(".py")) {
         content = [
           "def main():",
-          '    print("¡Hola desde Bacus!")',
+          '    print("Hello from Bacus / ¡Hola desde Bacus!")',
           "",
-          'if __name__ == "__main__":',
+          "if __name__ == \"__main__\":",
           "    main()",
           ""
         ].join("\n");
@@ -375,7 +456,7 @@ async function createPackageProject(): Promise<void> {
           "#include <stdio.h>",
           "",
           "int main(void) {",
-          '    puts("Hola desde Bacus");',
+          '    puts("Hello from Bacus / ¡Hola desde Bacus!");',
           "    return 0;",
           "}",
           ""
@@ -385,13 +466,13 @@ async function createPackageProject(): Promise<void> {
           "#include <iostream>",
           "",
           "int main() {",
-          '    std::cout << "Hola desde Bacus\\n";',
+          '    std::cout << "Hello from Bacus / ¡Hola desde Bacus!\\n";',
           "    return 0;",
           "}",
           ""
         ].join("\n");
       } else if (relative.endsWith(".js") || relative.endsWith(".ts")) {
-        content = 'console.log("Hola desde Bacus");\n';
+        content = 'console.log("Hello from Bacus / ¡Hola desde Bacus!");\n';
       } else if (relative.endsWith(".html")) {
         content = [
           "<!doctype html>",
@@ -404,15 +485,16 @@ async function createPackageProject(): Promise<void> {
           "</head>",
           "<body>",
           `  <h1>${name}</h1>`,
+          `  <p>Hello from Bacus / ¡Hola desde Bacus!</p>`,
           '  <script src="script.js"></script>',
           "</body>",
           "</html>",
           ""
         ].join("\n");
       } else if (relative.endsWith(".css")) {
-        content = "body {\n  font-family: sans-serif;\n}\n";
+        content = "body {\n  font-family: sans-serif;\n  padding: 2rem;\n}\n";
       } else if (relative.endsWith(".sh")) {
-        content = '#!/bin/sh\nprintf "%s\\n" "Hola desde Bacus"\n';
+        content = '#!/bin/sh\nprintf "%s\\n" "Hello from Bacus / ¡Hola desde Bacus!"\n';
       }
 
       await vscode.workspace.fs.writeFile(
@@ -422,7 +504,6 @@ async function createPackageProject(): Promise<void> {
     }
 
     const projectFiles = await readProjectFiles(root);
-
     const bp = buildBinaryPackage(projectFiles);
 
     await vscode.workspace.fs.writeFile(
@@ -444,7 +525,6 @@ async function createPackageProject(): Promise<void> {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-
     vscode.window.showErrorMessage(
       `No se pudo crear el proyecto o el paquete: ${message}`
     );
@@ -531,18 +611,9 @@ async function inspectPackage(): Promise<void> {
 
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "bacus.createPackage",
-      createPackageProject
-    ),
-    vscode.commands.registerCommand(
-      "bacus.validatePackage",
-      validateProject
-    ),
-    vscode.commands.registerCommand(
-      "bacus.inspectPackage",
-      inspectPackage
-    )
+    vscode.commands.registerCommand("bacus.createPackage", createPackageProject),
+    vscode.commands.registerCommand("bacus.validatePackage", validateProject),
+    vscode.commands.registerCommand("bacus.inspectPackage", inspectPackage)
   );
 }
 
