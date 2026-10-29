@@ -1,21 +1,24 @@
 
 #!/bin/sh
 # BACUSP - BP v1 Verifier
+# Bilingual-ready package integrity checker
 
 set -eu
 umask 077
 
 if [ "$#" -ne 1 ]; then
-    printf '%s\n' "Uso: bacusp verify PAQUETE.bp" >&2
+    printf '%s\n' \
+        "Uso: bacusp verify PAQUETE.bp" \
+        "Usage: bacusp verify PACKAGE.bp" >&2
     exit 2
 fi
 
 PACKAGE=$1
 
-[ -f "$PACKAGE" ] && [ ! -L "$PACKAGE" ] || {
-    printf '%s\n' "ERROR: el paquete debe ser un archivo regular, no un enlace." >&2
+if [ ! -f "$PACKAGE" ] || [ -L "$PACKAGE" ]; then
+    printf '%s\n' "ERROR: se requiere un archivo regular, no un enlace." >&2
     exit 2
-}
+fi
 
 command -v python3 >/dev/null 2>&1 || {
     printf '%s\n' "ERROR: se necesita Python 3." >&2
@@ -48,7 +51,6 @@ def exact(stream, size, label):
 def decode_value(value, label):
     result = bytearray()
     i = 0
-
     while i < len(value):
         if value[i] == "%":
             if i + 2 >= len(value):
@@ -64,7 +66,6 @@ def decode_value(value, label):
                 fail("carácter no permitido: " + label)
             result.append(code)
             i += 1
-
     try:
         return result.decode("utf-8", errors="strict")
     except UnicodeDecodeError:
@@ -91,7 +92,6 @@ def main():
             fail("versión o tamaño de cabecera incompatible")
         if flags != 0:
             fail("flags no admitidos")
-
         if HEADER.size + msize + tsize + psize != total_size:
             fail("el tamaño total no coincide con la cabecera")
 
@@ -102,7 +102,11 @@ def main():
             fail("manifiesto demasiado grande o límite inválido")
 
         raw_manifest = exact(stream, msize, "manifiesto")
-        if not raw_manifest.endswith(b"\n") or b"\r" in raw_manifest or b"\x00" in raw_manifest:
+        if (
+            not raw_manifest.endswith(b"\n")
+            or b"\r" in raw_manifest
+            or b"\x00" in raw_manifest
+        ):
             fail("formato de manifiesto inválido")
 
         try:
@@ -114,13 +118,11 @@ def main():
         for line in lines:
             if not line or "=" not in line:
                 fail("línea de manifiesto inválida")
-
             key, value = line.split("=", 1)
             if not re.fullmatch(r"[a-z][a-z0-9_]*", key):
                 fail("clave inválida: " + key)
             if key in manifest:
                 fail("clave duplicada: " + key)
-
             manifest[key] = decode_value(value, key)
 
         required = (
@@ -131,7 +133,9 @@ def main():
             if key not in manifest:
                 fail("falta el campo: " + key)
 
-        if not re.fullmatch(r"[A-Za-z0-9._+-]+", manifest["package_name"]):
+        if not re.fullmatch(
+            r"[A-Za-z0-9._+-]+", manifest["package_name"]
+        ):
             fail("nombre de paquete inválido")
         if not manifest["version"]:
             fail("versión vacía")
@@ -239,7 +243,7 @@ def main():
     print("Payload:", psize, "bytes")
     print("Tamaño total:", total_size, "bytes")
     print("Integridad SHA-256: verificada")
-    print("Nota: esto no certifica que el contenido sea inocuo.")
+    print("Aviso: la integridad no garantiza que el contenido sea inocuo.")
     return 0
 
 try:
